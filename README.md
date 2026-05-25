@@ -154,6 +154,10 @@ El botón "About" abre un modal con la foto del autor, nombre y enlaces a sus pe
 
 ```
 .
+├── index.html    # SPA completa (HTML + CSS + JS en un archivo)
+└── README.md     # Este archivo
+```
+.
 ├── gemini-deprecations-dashboard.html    # SPA completa (HTML + CSS + JS en un archivo)
 └── README.md                              # Este archivo
 ```
@@ -164,15 +168,15 @@ El botón "About" abre un modal con la foto del autor, nombre y enlaces a sus pe
 
 ```bash
 # Opción 1: Abrir directamente
-open gemini-deprecations-dashboard.html    # macOS
-xdg-open gemini-deprecations-dashboard.html  # Linux
+open index.html              # macOS
+xdg-open index.html          # Linux
 
 # Opción 2: Servidor HTTP simple (necesario para algunos proxies CORS)
 python3 -m http.server 8000
 # Luego visitar http://localhost:8000
 
 # Opción 3: Cualquier host estático (Netlify, Vercel, GitHub Pages, etc.)
-# Simplemente despliega el archivo HTML
+# Simplemente despliega el archivo index.html
 ```
 
 ---
