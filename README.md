@@ -4,6 +4,12 @@ Dashboard interactivo de página única para monitorear en tiempo real el ciclo 
 
 ### [>> Pruébalo en vivo <<](https://pfelipm.github.io/gemini-models/)
 
+![Vista de modelos](assets/Gemini-API-Deprecations-Dashboard-Models.png)
+*Vista principal de modelos con filtros y estadísticas*
+
+![Vista de timeline](assets/Gemini-API-Deprecations-Dashboard-Timeline.png)
+*Vista de timeline de shutdown ordenada por fecha descendente*
+
 ---
 
 ## Arquitectura
