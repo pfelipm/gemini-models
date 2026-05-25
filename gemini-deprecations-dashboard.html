@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini API Deprecations Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: { 800: '#1a1a2e', 900: '#0f0f1a' },
+                        accent: { 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .glass-hover:hover { background: rgba(255,255,255,0.08); }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1a1a2e; }
+        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-dark-900 text-white min-h-screen">
+    <div id="app" class="p-4 md:p-8 max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8 fade-in">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-accent-400 to-purple-400 bg-clip-text text-transparent">
+                        Gemini API Deprecations
+                    </h1>
+                    <p class="text-gray-400 mt-1">Real-time dashboard tracking model lifecycle</p>
+                    <a href="https://ai.google.dev/gemini-api/docs/deprecations" target="_blank" rel="noopener noreferrer" class="text-accent-400 hover:text-accent-500 text-sm mt-1 inline-block transition-colors">
+                        Source: ai.google.dev/gemini-api/docs/deprecations
+                    </a>
+                </div>
+                    <div class="flex items-center gap-3">
+                    <span id="status-dot" class="pulse-dot w-2 h-2 rounded-full bg-green-400"></span>
+                    <span id="status-text" class="text-sm text-gray-400">Live</span>
+                    <button id="refresh-btn" class="px-4 py-2 bg-accent-600 hover:bg-accent-500 rounded-lg text-sm font-medium transition-colors">
+                        Refresh
+                    </button>
+                    <button id="about-btn" class="px-4 py-2 bg-dark-800 hover:bg-accent-600 border border-gray-700 hover:border-accent-500 rounded-lg text-sm font-medium transition-colors">
+                        About
+                    </button>
+                    <span id="last-updated" class="text-xs text-gray-500"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 fade-in"></div>
+
+        <!-- Filters -->
+        <div class="glass rounded-xl p-4 mb-6 fade-in">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1">
+                    <input id="search" type="text" placeholder="Search models..." 
+                        class="w-full bg-dark-800 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-accent-500 transition-colors">
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    <button data-filter="all" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-accent-600 text-white transition-colors">All</button>
+                    <button data-filter="active" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-dark-800 text-gray-400 hover:text-white transition-colors">Active</button>
+                    <button data-filter="deprecated" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-dark-800 text-gray-400 hover:text-white transition-colors">Deprecated</button>
+                    <button data-filter="preview" class="filter-btn px-3 py-1.5 rounded-lg text-sm font-medium bg-dark-800 text-gray-400 hover:text-white transition-colors">Preview</button>
+                    <select id="family-filter" class="bg-dark-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent-500">
+                        <option value="">All Families</option>
+                    </select>
+                    <select id="sort" class="bg-dark-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-accent-500">
+                        <option value="family">Sort by Family</option>
+                        <option value="shutdown-asc">Shutdown Date ↑</option>
+                        <option value="shutdown-desc">Shutdown Date ↓</option>
+                        <option value="release-desc">Release Date ↓</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="flex flex-col items-center justify-center py-20">
+            <div class="w-12 h-12 border-4 border-accent-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-gray-400 mt-4">Fetching deprecation data...</p>
+        </div>
+
+        <!-- Error -->
+        <div id="error" class="hidden glass rounded-xl p-6 mb-6 text-center">
+            <p class="text-red-400 mb-2">Failed to load data from source</p>
+            <p id="error-msg" class="text-gray-500 text-sm"></p>
+            <button id="retry-btn" class="mt-4 px-4 py-2 bg-accent-600 hover:bg-accent-500 rounded-lg text-sm transition-colors">Retry</button>
+        </div>
+
+        <!-- Model Table -->
+        <div id="table-container" class="hidden fade-in">
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-700 bg-dark-800/50">
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Model</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Family</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Type</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Release Date</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Shutdown Date</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Replacement</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Status</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-400">Days Left</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline View -->
+        <div id="timeline-container" class="hidden mt-8 fade-in">
+            <h2 class="text-xl font-semibold mb-4 text-gray-300">Shutdown Timeline</h2>
+            <div id="timeline" class="glass rounded-xl p-6"></div>
+        </div>
+
+        <!-- About Modal -->
+        <div id="about-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="glass rounded-2xl p-8 max-w-md w-full relative fade-in">
+                <button id="close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+                <div class="text-center">
+                    <img src="https://drive.google.com/thumbnail?id=1pbNyTrnZeZvfWLu2Lm66f9tVQ3OqTKHx&sz=w500-h500" 
+                         alt="Pablo Felip" 
+                         class="w-24 h-24 rounded-full border-2 border-accent-500 mx-auto mb-4 object-cover">
+                    <h3 class="text-2xl font-bold text-white mb-1">Pablo Felip</h3>
+                    <p class="text-gray-400 text-sm mb-6">Creador de este dashboard</p>
+                    <div class="flex gap-3 justify-center">
+                        <a href="https://www.linkedin.com/in/pfelipm/" target="_blank" rel="noopener noreferrer" 
+                           class="px-4 py-2 bg-[#0077b5] hover:bg-[#006aa3] rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                            </svg>
+                            LinkedIn
+                        </a>
+                        <a href="https://github.com/pfelipm/gemini-models" target="_blank" rel="noopener noreferrer" 
+                           class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                            </svg>
+                            GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const CORS_PROXIES = [
+            'https://api.allorigins.win/raw?url=',
+            'https://corsproxy.io/?',
+            'https://api.codetabs.com/v1/proxy?quest='
+        ];
+        const SOURCE_URL = 'https://ai.google.dev/gemini-api/docs/deprecations';
+        const REFRESH_INTERVAL = 60000;
+
+        let allModels = [];
+        let currentFilter = 'all';
+        let currentSearch = '';
+        let currentSort = 'family';
+        let currentFamilyFilter = '';
+
+        const $ = id => document.getElementById(id);
+
+        function parseDate(str) {
+            if (!str || str.toLowerCase().includes('no shutdown')) return null;
+            const d = new Date(str);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '—';
+            const d = parseDate(dateStr);
+            return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : dateStr;
+        }
+
+        function daysUntil(dateStr) {
+            const d = parseDate(dateStr);
+            if (!d) return null;
+            const now = new Date();
+            now.setHours(0,0,0,0);
+            d.setHours(0,0,0,0);
+            return Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+        }
+
+        function getModelStatus(model) {
+            const days = daysUntil(model.shutdownDate);
+            if (days === null) return 'active';
+            if (days < 0) return 'shutdown';
+            if (model.isPreview) return 'preview';
+            if (days <= 30) return 'critical';
+            if (days <= 90) return 'warning';
+            return 'active';
+        }
+
+        function statusBadge(status) {
+            const map = {
+                active: 'bg-green-500/20 text-green-400 border-green-500/30',
+                preview: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                warning: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+                critical: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+                shutdown: 'bg-gray-500/20 text-gray-400 border-gray-500/30 line-through'
+            };
+            const labels = { active: 'Active', preview: 'Preview', warning: 'Deprecating', critical: 'Critical', shutdown: 'Shutdown' };
+            return `<span class="px-2 py-1 rounded-full text-xs font-medium border ${map[status]}">${labels[status]}</span>`;
+        }
+
+        function daysBadge(days, status) {
+            if (days === null) return '<span class="text-gray-500">—</span>';
+            if (days < 0) return `<span class="text-gray-500">${Math.abs(days)}d ago</span>`;
+            if (days <= 30) return `<span class="text-orange-400 font-semibold">${days}d</span>`;
+            if (days <= 90) return `<span class="text-yellow-400">${days}d</span>`;
+            return `<span class="text-green-400">${days}d</span>`;
+        }
+
+        function parseHTML(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const models = [];
+            let currentFamily = '';
+
+            const headings = doc.querySelectorAll('h2, h3');
+            const tables = doc.querySelectorAll('table');
+
+            headings.forEach((h, i) => {
+                const text = h.textContent.trim();
+                if (text && (text.includes('Gemini') || text.includes('model'))) {
+                    currentFamily = text;
+                }
+                const table = h.nextElementSibling;
+                if (table && table.tagName === 'TABLE') {
+                    extractTable(table, currentFamily, models);
+                }
+            });
+
+            if (models.length === 0 && tables.length > 0) {
+                tables.forEach(table => extractTable(table, 'Unknown', models));
+            }
+
+            return models;
+        }
+
+        function isValidModelName(name) {
+            if (!name) return false;
+            const parts = name.split('-');
+            if (parts.length < 2) return false;
+            return true;
+        }
+
+        function extractTable(table, family, models) {
+            const rows = table.querySelectorAll('tr');
+            let headers = [];
+            let isPreviewSection = false;
+
+            rows.forEach((row, idx) => {
+                const cells = row.querySelectorAll('th, td');
+                const texts = Array.from(cells).map(c => c.textContent.trim());
+
+                if (idx === 0 && cells[0]?.tagName === 'TH') {
+                    headers = texts;
+                    return;
+                }
+
+                if (texts.length === 1 && texts[0].toLowerCase().includes('preview')) {
+                    isPreviewSection = true;
+                    return;
+                }
+
+                if (texts.length >= 3) {
+                    const modelName = texts[0]?.replace(/`/g, '').trim() || '';
+                    if (!modelName || modelName.includes('|')) return;
+                    if (!isValidModelName(modelName)) return;
+
+                    models.push({
+                        name: modelName,
+                        family: family.replace(/^#+\s*/, ''),
+                        isPreview: isPreviewSection || modelName.toLowerCase().includes('preview'),
+                        releaseDate: texts[1] || '',
+                        shutdownDate: texts[2] || '',
+                        replacement: texts[3]?.replace(/`/g, '').trim() || ''
+                    });
+                }
+            });
+        }
+
+        async function fetchData() {
+            for (const proxy of CORS_PROXIES) {
+                try {
+                    const resp = await fetch(proxy + encodeURIComponent(SOURCE_URL), { signal: AbortSignal.timeout(10000) });
+                    if (!resp.ok) continue;
+                    const html = await resp.text();
+                    const models = parseHTML(html);
+                    if (models.length > 0) return models;
+                } catch (e) { continue; }
+            }
+            throw new Error('All proxies failed');
+        }
+
+        function loadFallbackData() {
+            return [
+                { name: 'gemini-3.5-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 19, 2026', shutdownDate: '', replacement: '' },
+                { name: 'gemini-3.1-flash-lite', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 7, 2026', shutdownDate: 'May 7, 2027', replacement: '' },
+                { name: 'gemini-3.1-flash-lite-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'March 3, 2026', shutdownDate: 'May 25, 2026', replacement: 'gemini-3.1-flash-lite' },
+                { name: 'gemini-3.1-flash-image-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 26, 2026', shutdownDate: '', replacement: '' },
+                { name: 'gemini-3.1-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 19, 2026', shutdownDate: '', replacement: '' },
+                { name: 'gemini-3-pro-image-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'November 20, 2025', shutdownDate: '', replacement: '' },
+                { name: 'gemini-3-flash-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'December 17, 2025', shutdownDate: '', replacement: 'gemini-3.5-flash' },
+                { name: 'gemini-3-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'November 18, 2025', shutdownDate: 'March 9, 2026', replacement: 'gemini-3.1-pro-preview' },
+                { name: 'gemini-2.5-pro', family: 'Gemini 2.5 Pro models', isPreview: false, releaseDate: 'June 17, 2025', shutdownDate: 'October 16, 2026', replacement: 'gemini-3.1-pro-preview' },
+                { name: 'gemini-2.5-pro-preview-03-25', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'March 3, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.1-pro-preview' },
+                { name: 'gemini-2.5-pro-preview-05-06', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'May 6, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.1-pro-preview' },
+                { name: 'gemini-2.5-pro-preview-06-05', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'June 5, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.1-pro-preview' },
+                { name: 'gemini-2.5-flash', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'June 17, 2025', shutdownDate: 'October 16, 2026', replacement: 'gemini-3.5-flash' },
+                { name: 'gemini-2.5-flash-image', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'October 2, 2025', shutdownDate: 'October 2, 2026', replacement: 'gemini-3.1-flash-image-preview' },
+                { name: 'gemini-2.5-flash-lite', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'July 22, 2025', shutdownDate: 'October 16, 2026', replacement: 'gemini-3.1-flash-lite' },
+                { name: 'gemini-2.5-flash-lite-preview-09-2025', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'March 31, 2026', replacement: 'gemini-3.1-flash-lite' }
+            ];
+        }
+
+        function getFilteredModels() {
+            let filtered = [...allModels];
+
+            if (currentFamilyFilter) {
+                filtered = filtered.filter(m => m.family === currentFamilyFilter);
+            }
+
+            if (currentFilter === 'active') {
+                filtered = filtered.filter(m => { const s = getModelStatus(m); return s === 'active'; });
+            } else if (currentFilter === 'deprecated') {
+                filtered = filtered.filter(m => { const s = getModelStatus(m); return ['warning', 'critical', 'shutdown'].includes(s); });
+            } else if (currentFilter === 'preview') {
+                filtered = filtered.filter(m => m.isPreview);
+            }
+
+            if (currentSearch) {
+                const q = currentSearch.toLowerCase();
+                filtered = filtered.filter(m => 
+                    m.name.toLowerCase().includes(q) || 
+                    m.family.toLowerCase().includes(q) || 
+                    m.replacement.toLowerCase().includes(q)
+                );
+            }
+
+            filtered.sort((a, b) => {
+                switch (currentSort) {
+                    case 'shutdown-asc':
+                        return (daysUntil(a.shutdownDate) ?? Infinity) - (daysUntil(b.shutdownDate) ?? Infinity);
+                    case 'shutdown-desc':
+                        return (daysUntil(b.shutdownDate) ?? -Infinity) - (daysUntil(a.shutdownDate) ?? -Infinity);
+                    case 'release-desc':
+                        return (parseDate(b.releaseDate) ?? 0) - (parseDate(a.releaseDate) ?? 0);
+                    default:
+                        return a.family.localeCompare(b.family) || a.name.localeCompare(b.name);
+                }
+            });
+
+            return filtered;
+        }
+
+        function renderStats() {
+            const total = allModels.length;
+            const active = allModels.filter(m => getModelStatus(m) === 'active').length;
+            const deprecated = allModels.filter(m => ['warning', 'critical', 'shutdown'].includes(getModelStatus(m))).length;
+            const previews = allModels.filter(m => m.isPreview).length;
+
+            $('stats').innerHTML = `
+                <div class="glass rounded-xl p-4 glass-hover transition-colors">
+                    <p class="text-gray-400 text-xs uppercase tracking-wider">Total Models</p>
+                    <p class="text-3xl font-bold mt-1">${total}</p>
+                </div>
+                <div class="glass rounded-xl p-4 glass-hover transition-colors">
+                    <p class="text-gray-400 text-xs uppercase tracking-wider">Active</p>
+                    <p class="text-3xl font-bold mt-1 text-green-400">${active}</p>
+                </div>
+                <div class="glass rounded-xl p-4 glass-hover transition-colors">
+                    <p class="text-gray-400 text-xs uppercase tracking-wider">Deprecated</p>
+                    <p class="text-3xl font-bold mt-1 text-orange-400">${deprecated}</p>
+                </div>
+                <div class="glass rounded-xl p-4 glass-hover transition-colors">
+                    <p class="text-gray-400 text-xs uppercase tracking-wider">Preview</p>
+                    <p class="text-3xl font-bold mt-1 text-blue-400">${previews}</p>
+                </div>
+            `;
+        }
+
+        function populateFamilyFilter() {
+            const families = [...new Set(allModels.map(m => m.family))].sort();
+            const select = $('family-filter');
+            select.innerHTML = '<option value="">All Families</option>' + 
+                families.map(f => `<option value="${f}">${f}</option>`).join('');
+        }
+
+        function renderTable() {
+            const filtered = getFilteredModels();
+            const tbody = $('table-body');
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-gray-500">No models match your filters</td></tr>`;
+                return;
+            }
+
+            let currentFamily = '';
+            tbody.innerHTML = filtered.map(m => {
+                const status = getModelStatus(m);
+                const days = daysUntil(m.shutdownDate);
+                const isShutdown = status === 'shutdown';
+                const rowClass = isShutdown ? 'opacity-50 bg-gray-800/30' : '';
+                const familyRow = m.family !== currentFamily ? (() => {
+                    currentFamily = m.family;
+                    return `<tr class="bg-accent-600/10"><td colspan="8" class="px-4 py-2 font-semibold text-accent-400 text-xs uppercase tracking-wider">${m.family}</td></tr>`;
+                })() : '';
+
+                return `${familyRow}
+                <tr class="border-b border-gray-800 hover:bg-white/5 transition-colors ${rowClass}">
+                    <td class="px-4 py-3 font-mono text-xs">${m.name}</td>
+                    <td class="px-4 py-3 text-gray-400 text-xs">${m.family}</td>
+                    <td class="px-4 py-3">${m.isPreview ? '<span class="text-blue-400 text-xs">Preview</span>' : '<span class="text-green-400 text-xs">Stable</span>'}</td>
+                    <td class="px-4 py-3 text-gray-400 text-xs">${formatDate(m.releaseDate)}</td>
+                    <td class="px-4 py-3 text-gray-400 text-xs">${formatDate(m.shutdownDate)}</td>
+                    <td class="px-4 py-3 font-mono text-xs">${m.replacement || '—'}</td>
+                    <td class="px-4 py-3">${statusBadge(status)}</td>
+                    <td class="px-4 py-3">${daysBadge(days, status)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderTimeline() {
+            const filtered = getFilteredModels();
+            const withShutdown = filtered
+                .filter(m => parseDate(m.shutdownDate))
+                .sort((a, b) => parseDate(b.shutdownDate) - parseDate(a.shutdownDate));
+
+            if (withShutdown.length === 0) {
+                $('timeline-container').classList.add('hidden');
+                return;
+            }
+
+            $('timeline-container').classList.remove('hidden');
+            $('timeline').innerHTML = withShutdown.map(m => {
+                const days = daysUntil(m.shutdownDate);
+                const isPast = days < 0;
+                const barWidth = Math.max(5, Math.min(100, days > 365 ? 100 : (days / 365) * 100));
+                const barColor = isPast ? 'bg-gray-600' : days <= 30 ? 'bg-orange-500' : days <= 90 ? 'bg-yellow-500' : 'bg-green-500';
+
+                return `
+                <div class="flex items-center gap-4 py-3 ${isPast ? 'opacity-50' : ''}">
+                    <div class="w-48 truncate font-mono text-xs" title="${m.name}">${m.name}</div>
+                    <div class="flex-1 bg-dark-800 rounded-full h-4 overflow-hidden">
+                        <div class="${barColor} h-full rounded-full transition-all" style="width: ${barWidth}%"></div>
+                    </div>
+                    <div class="w-24 text-right text-xs ${isPast ? 'text-gray-500' : days <= 30 ? 'text-orange-400' : 'text-gray-400'}">
+                        ${isPast ? `${Math.abs(days)}d ago` : `${days}d left`}
+                    </div>
+                    <div class="w-20 text-right text-xs text-gray-500">${formatDate(m.shutdownDate)}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function render() {
+            renderStats();
+            populateFamilyFilter();
+            renderTable();
+            renderTimeline();
+            $('table-container').classList.remove('hidden');
+            $('loading').classList.add('hidden');
+            $('error').classList.add('hidden');
+            $('last-updated').textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        async function load() {
+            $('loading').classList.remove('hidden');
+            $('table-container').classList.add('hidden');
+            $('error').classList.add('hidden');
+
+            try {
+                allModels = await fetchData();
+            } catch (e) {
+                console.warn('Fetch failed, using fallback data:', e);
+                allModels = loadFallbackData();
+                $('status-dot').classList.remove('bg-green-400');
+                $('status-dot').classList.add('bg-yellow-400');
+                $('status-text').textContent = 'Fallback';
+            }
+
+            render();
+        }
+
+        // Event listeners
+        $('refresh-btn').addEventListener('click', load);
+        $('retry-btn').addEventListener('click', load);
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => {
+                    b.classList.remove('bg-accent-600', 'text-white');
+                    b.classList.add('bg-dark-800', 'text-gray-400');
+                });
+                btn.classList.remove('bg-dark-800', 'text-gray-400');
+                btn.classList.add('bg-accent-600', 'text-white');
+                currentFilter = btn.dataset.filter;
+                renderTable();
+            });
+        });
+
+        $('search').addEventListener('input', (e) => {
+            currentSearch = e.target.value;
+            renderTable();
+        });
+
+        $('sort').addEventListener('change', (e) => {
+            currentSort = e.target.value;
+            renderTable();
+        });
+
+        $('family-filter').addEventListener('change', (e) => {
+            currentFamilyFilter = e.target.value;
+            renderTable();
+        });
+
+        $('about-btn').addEventListener('click', () => {
+            $('about-modal').classList.remove('hidden');
+        });
+
+        $('close-modal').addEventListener('click', () => {
+            $('about-modal').classList.add('hidden');
+        });
+
+        $('about-modal').addEventListener('click', (e) => {
+            if (e.target === $('about-modal')) {
+                $('about-modal').classList.add('hidden');
+            }
+        });
+
+        // Initial load
+        load();
+    })();
+    </script>
+</body>
+</html>
