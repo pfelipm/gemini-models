@@ -33,7 +33,7 @@ Cero dependencias npm. Cero paso de build. Un archivo.
 El dashboard usa una estrategia de **renderizado inmediato con actualización en background**:
 
 ```
-1. Carga inmediata → renderizar FALLBACK_DATA (60 modelos, 11 familias)
+1. Carga inmediata → renderizar FALLBACK_DATA (modelos actualizados por GitHub Action)
    │
    └─ Fetch en background → intentar en paralelo:
        │
@@ -85,20 +85,12 @@ La validación de modelos (`isValidModelName`) filtra filas que no son modelos v
 
 ### Datos de respaldo
 
-`loadFallbackData()` es un array de **60 modelos en 11 familias** embebido en el archivo. Se usa como fuente principal al cargar la página y como respaldo cuando todas las peticiones de red fallan. Es navegable inmediatamente al abrir la página.
+`loadFallbackData()` es un array de modelos embebido en el archivo, actualizado automáticamente por el GitHub Action cada 6 horas. Se usa como fuente principal al cargar la página y como respaldo cuando todas las peticiones de red fallan. Es navegable inmediatamente al abrir la página.
 
-Familias incluidas:
-- Gemini 3 models (10 modelos)
-- Gemini 2.5 Pro models (4 modelos)
-- Gemini 2.5 Flash models (7 modelos)
-- Gemini 2.0 models (7 modelos)
-- Live API models (4 modelos)
-- Audio models (3 modelos)
-- Embedding models (6 modelos)
-- Imagen models (6 modelos)
-- Veo models (8 modelos)
-- Lyria models (3 modelos)
-- Robotics models (2 modelos)
+Familias (al momento de escribir esto):
+- Gemini 3 models, Gemini 2.5 Pro models, Gemini 2.5 Flash models, Gemini 2.0 models
+- Live API models, Audio models, Embedding models, Imagen models
+- Veo models, Lyria models, Robotics models
 
 ---
 
