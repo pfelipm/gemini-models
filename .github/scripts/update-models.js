@@ -5,7 +5,10 @@ const fs = require('fs');
 
 async function fetchHTML() {
   const res = await fetch(SOURCE_URL, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; GeminiModelsBot/1.0)' },
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; GeminiModelsBot/1.0)',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
   });
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
   return res.text();
@@ -88,6 +91,11 @@ function generateFallbackCode(models) {
   return `        function loadFallbackData() {\n            return [\n${entries.join(',\n')}\n            ];\n        }`;
 }
 
+function generateTimestampCode() {
+  const now = new Date().toISOString();
+  return `        const DATA_PARSED_AT = '${now}';`;
+}
+
 async function main() {
   console.log('Fetching source page...');
   const html = await fetchHTML();
@@ -114,6 +122,15 @@ async function main() {
 
   const newCode = generateFallbackCode(models);
   indexContent = indexContent.slice(0, fallbackStart) + newCode + indexContent.slice(fallbackEnd);
+
+  const tsRegex = /const DATA_PARSED_AT = '[^']+';/;
+  const newTs = generateTimestampCode();
+  if (tsRegex.test(indexContent)) {
+    indexContent = indexContent.replace(tsRegex, newTs);
+  } else {
+    const scriptStart = indexContent.indexOf('<script>');
+    indexContent = indexContent.slice(0, scriptStart + 8) + '\n    ' + newTs + indexContent.slice(scriptStart + 8);
+  }
 
   fs.writeFileSync(INDEX_PATH, indexContent);
   console.log('Done!');
