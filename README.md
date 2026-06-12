@@ -31,20 +31,23 @@ Cero dependencias npm. Cero paso de build. Un archivo.
 ### Estrategia de fetch (al cargar la página + refresh manual)
 
 ```
-1. Fetch directo → https://ai.google.dev/gemini-api/docs/deprecations
+1. Carga inmediata → renderizar FALLBACK_DATA (60 modelos, 11 familias)
    │
-   ├─ éxito → parsear HTML
-   │
-   └─ fallo (CORS) → intentar proxies CORS en orden:
+   └─ Fetch en background → intentar en paralelo:
        │
-       ├─ https://api.allorigins.win/raw?url=...
+       ├─ Fetch directo → https://ai.google.dev/gemini-api/docs/deprecations
+       │   (funciona en GitHub Pages si Google envía CORS headers)
        │
-       ├─ https://corsproxy.io/?...
-       │
-       ├─ https://api.codetabs.com/v1/proxy?quest=...
-       │
-       ─ todos fallan → usar FALLBACK_DATA embebido
+       └─ Proxies CORS (si directo falla):
+           │
+           ├─ https://api.allorigins.win/raw?url=...
+           │
+           └─ https://api.codetabs.com/v1/proxy?quest=...
+               │
+               └─ todos fallan → mantener datos en caché (sin error visible)
 ```
+
+La página renderiza instantáneamente con los datos en caché. Si algún fetch responde, los datos se actualizan y el indicador cambia a "Live".
 
 ### Parseo de HTML (`parseHTML`)
 
@@ -55,13 +58,28 @@ La página de Google contiene tablas organizadas por familias de modelos. El par
 | **Encabezados** | `<h2>`, `<h3>` que contienen "Gemini" o "model" | Nombre de la familia |
 | **Tablas** | `<table>` siguientes a cada encabezado | `name`, `releaseDate`, `shutdownDate`, `replacement` |
 
+**Nota**: Las tablas usan `<td><b>Header</b></td>` en lugar de `<th>` para los encabezados. La detección de la fila de header se hace por contenido (celdas que contienen "model" y "date") en lugar de por nombre de tag.
+
 La validación de modelos (`isValidModelName`) filtra filas que no son modelos válidos:
 - Debe tener al menos un guión (estructura `familia-version-nombre`)
 - Ejemplos válidos: `gemini-3.5-flash`, `gemini-2.5-pro-preview-06-05`, `text-embedding-004`
 
 ### Datos de respaldo
 
-`loadFallbackData()` es un array de 16 modelos embebido en el archivo. Se usa cuando todas las peticiones de red fallan. Es navegable inmediatamente al abrir la página.
+`loadFallbackData()` es un array de **60 modelos en 11 familias** embebido en el archivo. Se usa como fuente principal al cargar la página y como respaldo cuando todas las peticiones de red fallan. Es navegable inmediatamente al abrir la página.
+
+Familias incluidas:
+- Gemini 3 models (10 modelos)
+- Gemini 2.5 Pro models (4 modelos)
+- Gemini 2.5 Flash models (7 modelos)
+- Gemini 2.0 models (7 modelos)
+- Live API models (4 modelos)
+- Audio models (3 modelos)
+- Embedding models (6 modelos)
+- Imagen models (6 modelos)
+- Veo models (8 modelos)
+- Lyria models (3 modelos)
+- Robotics models (2 modelos)
 
 ---
 
@@ -132,8 +150,8 @@ Visualización gráfica de barras que muestra:
 ### Indicador de estado
 
 Una píldora en el encabezado muestra el estado de la fuente de datos:
-- **Live** (verde) — parseado correctamente desde el remoto
-- **Fallback** (amarillo) — usando datos de respaldo
+- **Live** (verde) — datos parseados correctamente desde la fuente remota
+- **Cached** (amarillo) — usando datos de respaldo (fuente por defecto)
 
 ### Botón de actualizar
 
@@ -161,11 +179,8 @@ El botón "About" abre un modal con la foto del autor, nombre y enlaces a sus pe
 ```
 .
 ├── index.html    # SPA completa (HTML + CSS + JS en un archivo)
-└── README.md     # Este archivo
-```
-.
-├── gemini-deprecations-dashboard.html    # SPA completa (HTML + CSS + JS en un archivo)
-└── README.md                              # Este archivo
+├── README.md     # Este archivo
+└── assets/       # Imágenes para el README
 ```
 
 ---
@@ -189,8 +204,9 @@ python3 -m http.server 8000
 
 ## Limitaciones
 
-- **CORS**: El fetch directo a `ai.google.dev` será bloqueado por la política de same-origin. El fallback de proxies lo maneja, pero los proxies pueden tener límites de tasa o caídas.
+- **CORS**: El fetch directo a `ai.google.dev` será bloqueado por la política de same-origin cuando se abre como `file://`. En GitHub Pages (`https://pfelipm.github.io/gemini-models/`) el origin es válido, pero Google podría no enviar CORS headers. Los proxies CORS manejan el fallback, pero pueden tener límites de tasa o caídas.
 - **Fragilidad del parseo**: Si la estructura de la página fuente cambia (encabezados, orden de columnas), el parser puede romperse. Los datos de respaldo aseguran que el dashboard siempre funcione.
+- **Datos en caché**: Los datos de respaldo necesitan actualización manual cuando Google agrega o quita modelos del dashboard fuente.
 - **Sin persistencia**: El estado de filtros y ordenamiento está solo en memoria — se pierde al recargar la página.
 - **Sin componente de servidor**: Toda la computación es del lado del cliente. No se necesitan claves de API.
 
