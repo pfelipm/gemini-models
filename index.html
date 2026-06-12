@@ -170,7 +170,9 @@
     <script>
     (function() {
                                 const DATA_PARSED_AT = '2026-06-12T14:59:26.549Z';
+        const WORKER_URL = 'https://gemini-cors-proxy.pfelipm.workers.dev';
         const FETCH_TARGETS = [
+            { name: 'worker', url: WORKER_URL + '?url=' },
             { name: 'direct', url: '', direct: true },
             { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
             { name: 'codetabs', url: 'https://api.codetabs.com/v1/proxy?quest=' },
