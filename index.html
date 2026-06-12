@@ -170,6 +170,7 @@
     <script>
     (function() {
                                 const DATA_PARSED_AT = '2026-06-12T14:59:26.549Z';
+        let dataParsedAt = DATA_PARSED_AT;
         const WORKER_URL = 'https://gemini-cors-proxy.pfelipm.workers.dev';
         const FETCH_TARGETS = [
             { name: 'worker', url: WORKER_URL + '?url=' },
@@ -545,7 +546,7 @@
             $('table-container').classList.remove('hidden');
             $('loading').classList.add('hidden');
             $('error').classList.add('hidden');
-            $('last-updated').textContent = `Data parsed: ${new Date(DATA_PARSED_AT).toLocaleString()}`;
+            $('last-updated').textContent = `Data parsed: ${new Date(dataParsedAt).toLocaleString()}`;
         }
 
         async function load() {
@@ -555,6 +556,7 @@
 
             fetchData().then((liveModels) => {
                 allModels = liveModels;
+                dataParsedAt = new Date().toISOString();
                 $('status-dot').classList.remove('bg-yellow-400');
                 $('status-dot').classList.add('bg-green-400');
                 $('status-text').textContent = 'Live';
