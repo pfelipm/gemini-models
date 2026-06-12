@@ -26,6 +26,10 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .pulse-dot { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .btn-refreshing { pointer-events: none; opacity: 0.7; }
+        .btn-refreshing .btn-text { display: none; }
+        .btn-refreshing .btn-spinner { display: inline-block; }
+        .btn-spinner { display: none; }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1a1a2e; }
         ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
@@ -49,7 +53,11 @@
                     <span id="status-dot" class="pulse-dot w-2 h-2 rounded-full bg-yellow-400"></span>
                     <span id="status-text" class="text-sm text-gray-400">Cached</span>
                     <button id="refresh-btn" class="px-4 py-2 bg-accent-600 hover:bg-accent-500 rounded-lg text-sm font-medium transition-colors">
-                        Refresh
+                        <span class="btn-text">Refresh</span>
+                        <svg class="btn-spinner w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
                     </button>
                     <a href="#timeline-container" class="px-4 py-2 bg-dark-800 hover:bg-accent-600 border border-gray-700 hover:border-accent-500 rounded-lg text-sm font-medium transition-colors">
                         Timeline
@@ -552,6 +560,9 @@
             $('loading').classList.add('hidden');
             render();
 
+            const btn = $('refresh-btn');
+            btn.classList.add('btn-refreshing');
+
             fetchData().then((liveModels) => {
                 allModels = liveModels;
                 dataParsedAt = new Date().toISOString();
@@ -561,6 +572,8 @@
                 render();
             }).catch(() => {
                 console.warn('Fetch failed, using cached data');
+            }).finally(() => {
+                btn.classList.remove('btn-refreshing');
             });
         }
 
