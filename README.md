@@ -28,26 +28,45 @@ Cero dependencias npm. Cero paso de build. Un archivo.
 
 ## Pipeline de datos
 
-### Estrategia de fetch (al cargar la página + refresh manual)
+### Estrategia de carga
+
+El dashboard usa una estrategia de **renderizado inmediato con actualización en background**:
 
 ```
 1. Carga inmediata → renderizar FALLBACK_DATA (60 modelos, 11 familias)
    │
    └─ Fetch en background → intentar en paralelo:
        │
-       ├─ Fetch directo → https://ai.google.dev/gemini-api/docs/deprecations
-       │   (funciona en GitHub Pages si Google envía CORS headers)
+       ├─ Cloudflare Worker → https://gemini-cors-proxy.pfelipm.workers.dev
+       │   (proxy propio, ~50ms, CORS habilitado)
        │
-       └─ Proxies CORS (si directo falla):
-           │
-           ├─ https://api.allorigins.win/raw?url=...
-           │
-           └─ https://api.codetabs.com/v1/proxy?quest=...
+       └─ Fetch directo → https://ai.google.dev/gemini-api/docs/deprecations
+           (funciona en GitHub Pages si Google envía CORS headers)
                │
                └─ todos fallan → mantener datos en caché (sin error visible)
 ```
 
-La página renderiza instantáneamente con los datos en caché. Si algún fetch responde, los datos se actualizan y el indicador cambia a "Live".
+La página renderiza instantáneamente con los datos en caché. Si algún fetch responde, los datos se actualizan automáticamente y el indicador cambia de "Cached" a "Live".
+
+### Cloudflare Worker (`worker.js`)
+
+Proxy CORS propio desplegado en Cloudflare Workers (tier gratuito, 100k req/día):
+
+- Hace fetch directo a `ai.google.dev` desde el edge de Cloudflare (sin problemas de CORS)
+- Devuelve el HTML con headers `Access-Control-Allow-Origin: *`
+- Cachea 5 minutos para reducir requests a la fuente
+- Desplegable con: `wrangler deploy`
+
+### GitHub Actions (`.github/workflows/update-models.yml`)
+
+Workflow automatizado que mantiene el fallback data actualizado:
+
+- Se ejecuta cada 6 horas (`cron: '0 */6 * * *'`)
+- Hace fetch directo a `ai.google.dev` desde los servidores de GitHub (sin CORS)
+- Parsea los modelos y actualiza `loadFallbackData()` en `index.html`
+- Actualiza la constante `DATA_PARSED_AT` con la fecha/hora del parseo
+- Hace commit y push automático si hay cambios
+- Se puede ejecutar manualmente desde GitHub Actions
 
 ### Parseo de HTML (`parseHTML`)
 
@@ -178,9 +197,16 @@ El botón "About" abre un modal con la foto del autor, nombre y enlaces a sus pe
 
 ```
 .
-├── index.html    # SPA completa (HTML + CSS + JS en un archivo)
-├── README.md     # Este archivo
-└── assets/       # Imágenes para el README
+├── index.html                              # SPA completa (HTML + CSS + JS)
+├── worker.js                               # Cloudflare Worker (proxy CORS)
+├── wrangler.toml                           # Config de Cloudflare Workers
+├── README.md                               # Este archivo
+├── .github/
+│   ├── scripts/
+│   │   └── update-models.js                # Script de actualización de datos
+│   └── workflows/
+│       └── update-models.yml               # GitHub Action (cada 6h)
+└── assets/                                 # Imágenes para el README
 ```
 
 ---
@@ -204,9 +230,9 @@ python3 -m http.server 8000
 
 ## Limitaciones
 
-- **CORS**: El fetch directo a `ai.google.dev` será bloqueado por la política de same-origin cuando se abre como `file://`. En GitHub Pages (`https://pfelipm.github.io/gemini-models/`) el origin es válido, pero Google podría no enviar CORS headers. Los proxies CORS manejan el fallback, pero pueden tener límites de tasa o caídas.
+- **CORS**: El fetch directo a `ai.google.dev` será bloqueado por la política de same-origin cuando se abre como `file://`. En GitHub Pages el origin es válido, pero Google podría no enviar CORS headers. El Cloudflare Worker propio resuelve este problema.
 - **Fragilidad del parseo**: Si la estructura de la página fuente cambia (encabezados, orden de columnas), el parser puede romperse. Los datos de respaldo aseguran que el dashboard siempre funcione.
-- **Datos en caché**: Los datos de respaldo necesitan actualización manual cuando Google agrega o quita modelos del dashboard fuente.
+- **Datos en caché**: El GitHub Action actualiza automáticamente el fallback data cada 6 horas.
 - **Sin persistencia**: El estado de filtros y ordenamiento está solo en memoria — se pierde al recargar la página.
 - **Sin componente de servidor**: Toda la computación es del lado del cliente. No se necesitan claves de API.
 
