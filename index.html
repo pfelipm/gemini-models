@@ -46,8 +46,8 @@
                     </a>
                 </div>
                     <div class="flex items-center gap-3">
-                    <span id="status-dot" class="pulse-dot w-2 h-2 rounded-full bg-green-400"></span>
-                    <span id="status-text" class="text-sm text-gray-400">Live</span>
+                    <span id="status-dot" class="pulse-dot w-2 h-2 rounded-full bg-yellow-400"></span>
+                    <span id="status-text" class="text-sm text-gray-400">Cached</span>
                     <button id="refresh-btn" class="px-4 py-2 bg-accent-600 hover:bg-accent-500 rounded-lg text-sm font-medium transition-colors">
                         Refresh
                     </button>
@@ -169,13 +169,14 @@
 
     <script>
     (function() {
-        const CORS_PROXIES = [
-            'https://api.allorigins.win/raw?url=',
-            'https://corsproxy.io/?',
-            'https://api.codetabs.com/v1/proxy?quest='
+        const FETCH_TARGETS = [
+            { name: 'direct', url: '', direct: true },
+            { name: 'allorigins', url: 'https://api.allorigins.win/raw?url=' },
+            { name: 'codetabs', url: 'https://api.codetabs.com/v1/proxy?quest=' },
         ];
         const SOURCE_URL = 'https://ai.google.dev/gemini-api/docs/deprecations';
         const REFRESH_INTERVAL = 60000;
+        const FETCH_TIMEOUT = 15000;
 
         let allModels = [];
         let currentFilter = 'all';
@@ -274,14 +275,18 @@
             const rows = table.querySelectorAll('tr');
             let headers = [];
             let isPreviewSection = false;
+            let isHeaderRow = true;
 
             rows.forEach((row, idx) => {
                 const cells = row.querySelectorAll('th, td');
                 const texts = Array.from(cells).map(c => c.textContent.trim());
 
-                if (idx === 0 && cells[0]?.tagName === 'TH') {
-                    headers = texts;
-                    return;
+                if (isHeaderRow) {
+                    isHeaderRow = false;
+                    if (texts.some(t => t.toLowerCase().includes('model') && t.toLowerCase().includes('date'))) {
+                        headers = texts;
+                        return;
+                    }
                 }
 
                 if (texts.length === 1 && texts[0].toLowerCase().includes('preview')) {
@@ -307,28 +312,36 @@
         }
 
         async function fetchData() {
-            for (const proxy of CORS_PROXIES) {
-                try {
-                    const resp = await fetch(proxy + encodeURIComponent(SOURCE_URL), { signal: AbortSignal.timeout(10000) });
-                    if (!resp.ok) continue;
-                    const html = await resp.text();
-                    const models = parseHTML(html);
-                    if (models.length > 0) return models;
-                } catch (e) { continue; }
+            const promises = FETCH_TARGETS.map(async (target) => {
+                const url = target.direct ? SOURCE_URL : target.url + encodeURIComponent(SOURCE_URL);
+                const resp = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+                if (!resp.ok) throw new Error(`${target.name}: HTTP ${resp.status}`);
+                const html = await resp.text();
+                const models = parseHTML(html);
+                if (models.length === 0) throw new Error(`${target.name}: No models parsed`);
+                return models;
+            });
+
+            try {
+                return await Promise.any(promises);
+            } catch (e) {
+                console.warn('All fetch attempts failed:', e.errors);
+                throw new Error('All fetch attempts failed');
             }
-            throw new Error('All proxies failed');
         }
 
         function loadFallbackData() {
             return [
                 { name: 'gemini-3.5-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 19, 2026', shutdownDate: '', replacement: '' },
+                { name: 'gemini-3.1-flash-image', family: 'Gemini 3 models', isPreview: false, releaseDate: 'April 2, 2026', shutdownDate: '', replacement: '' },
+                { name: 'gemini-3-pro-image', family: 'Gemini 3 models', isPreview: false, releaseDate: 'March 25, 2026', shutdownDate: '', replacement: '' },
                 { name: 'gemini-3.1-flash-lite', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 7, 2026', shutdownDate: 'May 7, 2027', replacement: '' },
-                { name: 'gemini-3.1-flash-lite-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'March 3, 2026', shutdownDate: 'May 25, 2026', replacement: 'gemini-3.1-flash-lite' },
                 { name: 'gemini-3.1-flash-image-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 26, 2026', shutdownDate: '', replacement: '' },
                 { name: 'gemini-3.1-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 19, 2026', shutdownDate: '', replacement: '' },
                 { name: 'gemini-3-pro-image-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'November 20, 2025', shutdownDate: '', replacement: '' },
                 { name: 'gemini-3-flash-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'December 17, 2025', shutdownDate: '', replacement: 'gemini-3.5-flash' },
                 { name: 'gemini-3-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'November 18, 2025', shutdownDate: 'March 9, 2026', replacement: 'gemini-3.1-pro-preview' },
+                { name: 'gemini-3.1-flash-lite-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'March 3, 2026', shutdownDate: 'May 25, 2026', replacement: 'gemini-3.1-flash-lite' },
                 { name: 'gemini-2.5-pro', family: 'Gemini 2.5 Pro models', isPreview: false, releaseDate: 'June 17, 2025', shutdownDate: 'October 16, 2026', replacement: 'gemini-3.1-pro-preview' },
                 { name: 'gemini-2.5-pro-preview-03-25', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'March 3, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.1-pro-preview' },
                 { name: 'gemini-2.5-pro-preview-05-06', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'May 6, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.1-pro-preview' },
@@ -336,7 +349,49 @@
                 { name: 'gemini-2.5-flash', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'June 17, 2025', shutdownDate: 'October 16, 2026', replacement: 'gemini-3.5-flash' },
                 { name: 'gemini-2.5-flash-image', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'October 2, 2025', shutdownDate: 'October 2, 2026', replacement: 'gemini-3.1-flash-image-preview' },
                 { name: 'gemini-2.5-flash-lite', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'July 22, 2025', shutdownDate: 'October 16, 2026', replacement: 'gemini-3.1-flash-lite' },
-                { name: 'gemini-2.5-flash-lite-preview-09-2025', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'March 31, 2026', replacement: 'gemini-3.1-flash-lite' }
+                { name: 'gemini-2.5-flash-lite-preview-09-2025', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'March 31, 2026', replacement: 'gemini-3.1-flash-lite' },
+                { name: 'gemini-2.5-flash-preview-05-20', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.5-flash' },
+                { name: 'gemini-2.5-flash-image-preview', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.1-flash-image-preview' },
+                { name: 'gemini-2.5-flash-preview-09-25', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'March 31, 2026', replacement: 'gemini-3.5-flash' },
+                { name: 'gemini-2.0-flash', family: 'Gemini 2.0 models', isPreview: false, releaseDate: 'February 5, 2025', shutdownDate: 'June 1, 2026', replacement: 'gemini-3.5-flash' },
+                { name: 'gemini-2.0-flash-001', family: 'Gemini 2.0 models', isPreview: false, releaseDate: 'February 5, 2025', shutdownDate: 'June 1, 2026', replacement: 'gemini-3.5-flash' },
+                { name: 'gemini-2.0-flash-lite', family: 'Gemini 2.0 models', isPreview: false, releaseDate: 'February 25, 2025', shutdownDate: 'June 1, 2026', replacement: 'gemini-3.1-flash-lite' },
+                { name: 'gemini-2.0-flash-lite-001', family: 'Gemini 2.0 models', isPreview: false, releaseDate: 'February 25, 2025', shutdownDate: 'June 1, 2026', replacement: 'gemini-3.1-flash-lite' },
+                { name: 'gemini-2.0-flash-preview-image-generation', family: 'Gemini 2.0 models', isPreview: true, releaseDate: 'May 7, 2025', shutdownDate: 'November 14, 2025', replacement: 'gemini-2.5-flash-image' },
+                { name: 'gemini-2.0-flash-lite-preview', family: 'Gemini 2.0 models', isPreview: true, releaseDate: 'February 5, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-2.5-flash-lite' },
+                { name: 'gemini-2.0-flash-lite-preview-02-05', family: 'Gemini 2.0 models', isPreview: true, releaseDate: 'February 5, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-2.5-flash-lite' },
+                { name: 'gemini-2.0-flash-live-001', family: 'Live API models', isPreview: false, releaseDate: 'April 9, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-3.1-flash-live-preview' },
+                { name: 'gemini-3.1-flash-live-preview', family: 'Live API models', isPreview: true, releaseDate: 'March 11, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'gemini-2.5-flash-native-audio-preview-12-2025', family: 'Live API models', isPreview: true, releaseDate: 'December 12, 2025', shutdownDate: 'No shutdown date announced', replacement: 'gemini-3.1-flash-live-preview' },
+                { name: 'gemini-live-2.5-flash-preview', family: 'Live API models', isPreview: true, releaseDate: 'June 17, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-3.1-flash-live-preview' },
+                { name: 'gemini-3.1-flash-tts-preview', family: 'Audio models', isPreview: true, releaseDate: 'April 13, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'gemini-2.5-flash-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'No shutdown date announced', replacement: 'gemini-3.1-flash-tts-preview' },
+                { name: 'gemini-2.5-pro-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'No shutdown date announced', replacement: 'gemini-3.1-flash-tts-preview' },
+                { name: 'gemini-embedding-001', family: 'Embedding models', isPreview: false, releaseDate: 'July 14, 2025', shutdownDate: 'July 14, 2026', replacement: 'gemini-embedding-2' },
+                { name: 'text-embedding-004', family: 'Embedding models', isPreview: false, releaseDate: 'April 9, 2024', shutdownDate: 'January 14, 2026', replacement: 'gemini-embedding-2' },
+                { name: 'embedding-001', family: 'Embedding models', isPreview: true, releaseDate: 'April 9, 2024', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'embedding-gecko-001', family: 'Embedding models', isPreview: true, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'gemini-embedding-exp', family: 'Embedding models', isPreview: true, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'gemini-embedding-exp-03-07', family: 'Embedding models', isPreview: true, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'imagen-4.0-generate-001', family: 'Imagen models', isPreview: false, releaseDate: 'June 24, 2025', shutdownDate: 'June 24, 2026', replacement: 'gemini-3-pro-image-preview or gemini-2.5-flash-image' },
+                { name: 'imagen-4.0-ultra-generate-001', family: 'Imagen models', isPreview: false, releaseDate: 'June 24, 2025', shutdownDate: 'June 24, 2026', replacement: 'gemini-3-pro-image-preview or gemini-2.5-flash-image' },
+                { name: 'imagen-4.0-fast-generate-001', family: 'Imagen models', isPreview: false, releaseDate: 'June 24, 2025', shutdownDate: 'June 24, 2026', replacement: 'gemini-3-pro-image-preview or gemini-2.5-flash-image' },
+                { name: 'imagen-3.0-generate-002', family: 'Imagen models', isPreview: false, releaseDate: 'February 6, 2025', shutdownDate: 'November 10, 2025', replacement: 'imagen-4.0-generate-001' },
+                { name: 'imagen-4.0-generate-preview-06-06', family: 'Imagen models', isPreview: true, releaseDate: 'June 24, 2025', shutdownDate: 'February 17, 2026', replacement: 'imagen-4.0-generate-001' },
+                { name: 'imagen-4.0-ultra-generate-preview-06-06', family: 'Imagen models', isPreview: true, releaseDate: 'June 24, 2025', shutdownDate: 'February 17, 2026', replacement: 'imagen-4.0-ultra-generate-001' },
+                { name: 'veo-3.0-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'September 9, 2025', shutdownDate: 'Coming soon', replacement: 'veo-3.1-generate-preview' },
+                { name: 'veo-3.0-fast-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'September 9, 2025', shutdownDate: 'Coming soon', replacement: 'veo-3.1-lite-generate-preview' },
+                { name: 'veo-2.0-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'April 9, 2025', shutdownDate: 'Coming soon', replacement: 'veo-3.1-generate-preview' },
+                { name: 'veo-3.1-lite-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'March 31, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'veo-3.1-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'October 15, 2025', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'veo-3.1-fast-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'October 15, 2025', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'veo-3.0-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'July 31, 2025', shutdownDate: 'November 12, 2025', replacement: 'veo-3.1-generate-preview' },
+                { name: 'veo-3.0-fast-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'July 31, 2025', shutdownDate: 'November 12, 2025', replacement: 'veo-3.1-fast-generate-preview' },
+                { name: 'lyria-3-clip-preview', family: 'Lyria models', isPreview: true, releaseDate: 'March 25, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'lyria-3-pro-preview', family: 'Lyria models', isPreview: true, releaseDate: 'March 25, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'lyria-realtime-exp', family: 'Lyria models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'gemini-robotics-er-1.6-preview', family: 'Robotics models', isPreview: true, releaseDate: 'April 14, 2026', shutdownDate: 'No shut down date announced', replacement: '' },
+                { name: 'gemini-robotics-er-1.5-preview', family: 'Robotics models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'April 30, 2026', replacement: 'gemini-robotics-er-1.6-preview' }
             ];
         }
 
@@ -491,21 +546,19 @@
         }
 
         async function load() {
-            $('loading').classList.remove('hidden');
-            $('table-container').classList.add('hidden');
-            $('error').classList.add('hidden');
-
-            try {
-                allModels = await fetchData();
-            } catch (e) {
-                console.warn('Fetch failed, using fallback data:', e);
-                allModels = loadFallbackData();
-                $('status-dot').classList.remove('bg-green-400');
-                $('status-dot').classList.add('bg-yellow-400');
-                $('status-text').textContent = 'Fallback';
-            }
-
+            allModels = loadFallbackData();
+            $('loading').classList.add('hidden');
             render();
+
+            fetchData().then((liveModels) => {
+                allModels = liveModels;
+                $('status-dot').classList.remove('bg-yellow-400');
+                $('status-dot').classList.add('bg-green-400');
+                $('status-text').textContent = 'Live';
+                render();
+            }).catch(() => {
+                console.warn('Fetch failed, using cached data');
+            });
         }
 
         // Event listeners
