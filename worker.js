@@ -1,3 +1,21 @@
+const ALLOWED_TARGETS = [
+  { host: 'opencode.ai', pathPrefix: '/docs/' },
+  { host: 'ai.google.dev', pathPrefix: '/gemini-api/docs/' },
+];
+
+function isAllowed(target) {
+  let parsed;
+  try {
+    parsed = new URL(target);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  return ALLOWED_TARGETS.some(
+    (t) => parsed.hostname === t.host && parsed.pathname.startsWith(t.pathPrefix)
+  );
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
@@ -18,9 +36,13 @@ export default {
       return new Response('Missing "url" parameter', { status: 400 });
     }
 
+    if (!isAllowed(target)) {
+      return new Response('Target URL not allowed', { status: 403 });
+    }
+
     const response = await fetch(target, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; GeminiModelsBot/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; DocsProxyBot/1.0)',
         'Accept-Language': 'en-US,en;q=0.9',
       },
     });

@@ -37,7 +37,7 @@ El dashboard usa una estrategia de **renderizado inmediato con actualización en
    │
    └─ Fetch en background → intentar en paralelo:
        │
-       ├─ Cloudflare Worker → https://gemini-cors-proxy.pfelipm.workers.dev
+       ├─ Cloudflare Worker → https://docs-cors-proxy.pfelipm.workers.dev
        │   (proxy propio, ~50ms, CORS habilitado)
        │
        └─ Fetch directo → https://ai.google.dev/gemini-api/docs/deprecations
@@ -55,6 +55,8 @@ Proxy CORS propio desplegado en Cloudflare Workers (tier gratuito, 100k req/día
 - Hace fetch directo a `ai.google.dev` desde el edge de Cloudflare (sin problemas de CORS)
 - Devuelve el HTML con headers `Access-Control-Allow-Origin: *`
 - Cachea 5 minutos para reducir requests a la fuente
+- Restringe los destinos a una allowlist: `opencode.ai/docs/*` y `ai.google.dev/gemini-api/docs/*` (403 fuera de ella)
+- Compartido con el dashboard de precios de opencode Zen (https://github.com/pfelipm/opencode-zen-precios)
 - Desplegable con: `wrangler deploy`
 
 ### GitHub Actions (`.github/workflows/update-models.yml`)
