@@ -56,7 +56,7 @@ Proxy CORS propio desplegado en Cloudflare Workers (tier gratuito, 100k req/día
 - Devuelve el HTML con headers `Access-Control-Allow-Origin: *`
 - Cachea 5 minutos para reducir requests a la fuente
 - Restringe los destinos a una allowlist: `opencode.ai/docs/*` y `ai.google.dev/gemini-api/docs/*` (403 fuera de ella)
-- Compartido con el dashboard de precios de opencode Zen (https://github.com/pfelipm/opencode-zen-precios)
+- Compartido con el dashboard [opencode-zen-precios](https://github.com/pfelipm/opencode-zen-precios)
 - Desplegable con: `wrangler deploy`
 
 ### GitHub Actions (`.github/workflows/update-models.yml`)
