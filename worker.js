@@ -3,6 +3,16 @@ const ALLOWED_TARGETS = [
   { host: 'ai.google.dev', pathPrefix: '/gemini-api/docs/' },
 ];
 
+// Higiene anti-hotlinking: sólo los dashboards en GitHub Pages o uso local
+// (file:// envía Origin "null"; curl/herramientas no envían Origin).
+// No es un control de seguridad real: Origin lo controla el cliente.
+const ALLOWED_ORIGINS = ['https://pfelipm.github.io', 'null'];
+
+function isOriginAllowed(request) {
+  const origin = request.headers.get('Origin');
+  return origin === null || ALLOWED_ORIGINS.includes(origin);
+}
+
 function isAllowed(target) {
   let parsed;
   try {
@@ -27,6 +37,10 @@ export default {
           'Access-Control-Max-Age': '86400',
         },
       });
+    }
+
+    if (!isOriginAllowed(request)) {
+      return new Response('Origin not allowed', { status: 403 });
     }
 
     const url = new URL(request.url);
