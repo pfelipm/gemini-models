@@ -1,6 +1,6 @@
 # Gemini API Deprecations Dashboard
 
-Dashboard interactivo de página única para monitorear en tiempo real el ciclo de vida y deprecaciones de modelos de [Gemini API](https://ai.google.dev/gemini-api/docs/deprecations).
+Dashboard interactivo de página única para monitorizar en tiempo real el ciclo de vida y deprecaciones de modelos de [Gemini API](https://ai.google.dev/gemini-api/docs/deprecations).
 
 ### [>> Pruébalo en vivo <<](https://pfelipm.github.io/gemini-models/)
 
@@ -115,15 +115,17 @@ Cada modelo es un objeto con esta estructura:
 
 ### Estados del modelo
 
-El estado se calcula dinámicamente según los días restantes hasta el shutdown:
+El estado se calcula dinámicamente según los días restantes hasta el shutdown, evaluados en este orden. `isPreview` **no** interviene: el tipo de modelo lo comunica la columna de tipo (Preview/Stable), un eje independiente que nunca enmascara la urgencia.
 
 | Estado | Condición | Color |
 |--------|-----------|-------|
-| **Active** | Sin fecha de shutdown | Verde |
-| **Preview** | `isPreview === true` | Azul |
-| **Warning** | ≤ 90 días para shutdown | Amarillo |
+| **Active** | Sin fecha de shutdown anunciada | Verde |
+| **Deprecated** | Fecha de shutdown a más de 90 días | Amarillo suave |
+| **Warning** | Fecha de shutdown entre 31 y 90 días | Amarillo |
 | **Critical** | ≤ 30 días para shutdown | Naranja |
 | **Shutdown** | Fecha de shutdown ya pasó | Gris (tachado) |
+
+**"Deprecated" como paraguas**: un modelo está deprecated en sentido amplio cuando su cierre está anunciado (Deprecated, Warning o Critical) o ya ocurrió (Shutdown). El chip y la tarjeta de estadística "Deprecated" agrupan estos cuatro estados, de modo que **Total = Active + Deprecated**.
 
 ---
 
@@ -134,7 +136,7 @@ El estado se calcula dinámicamente según los días restantes hasta el shutdown
 | Control | Comportamiento |
 |---------|---------------|
 | **Buscador** | Filtro de texto en tiempo real sobre `name`, `family` y `replacement` |
-| **Chips de estado** | All / Active / Deprecated / Preview (selección única) |
+| **Chips de filtro** | All / Active / Deprecated / Preview (selección única). Active y Deprecated filtran por estado; Preview filtra por tipo (`isPreview`) y por diseño solapa con los otros dos: un preview sin fecha de cierre aparece en Active y en Preview, y uno ya cerrado aparece en Deprecated y en Preview |
 | **Selector de familia** | Filtra por familia de modelos (ej. "Gemini 3 models", "Gemini 2.5 Pro models") |
 
 ### Ordenamiento
@@ -149,18 +151,18 @@ El estado se calcula dinámicamente según los días restantes hasta el shutdown
 ### Tarjetas de estadísticas
 
 Cuatro tarjetas resumen en la parte superior, calculadas a partir de todos los datos:
-- **Total Models**: Cantidad total de modelos
-- **Active**: Modelos activos (sin fecha de shutdown)
-- **Deprecated**: Modelos en warning, critical o shutdown
-- **Preview**: Modelos en versión preview
+- **Total Models**: Cantidad total de modelos (**Total = Active + Deprecated**)
+- **Active**: Modelos sin fecha de shutdown anunciada
+- **Deprecated**: Modelos con cierre anunciado o ya efectivo (estados deprecated, warning, critical o shutdown)
+- **Preview**: Métrica de tipo (`isPreview`), independiente del estado — solapa con Active y Deprecated
 
 ### Timeline de Shutdown
 
 Visualización gráfica de barras que muestra:
-- Modelos con fecha de shutdown ordenados descendente
+- Modelos con fecha de shutdown ordenados descendente (respeta los filtros activos)
 - Barras proporcionales a los días restantes
-- Colores según urgencia (verde → amarillo → naranja → gris)
-- Días restantes o "Xd ago" si ya pasó la fecha
+- Mismo código de color por estado que el badge: amarillo suave (> 90 días) → amarillo (≤ 90 días) → naranja (≤ 30 días) → gris (ya pasó)
+- Días restantes ("Xd left") o "Xd ago" si ya pasó la fecha
 
 ### Indicador de estado
 
@@ -196,6 +198,8 @@ El botón "About" abre un modal con la foto del autor, nombre y enlaces a sus pe
 ├── index.html                              # SPA completa (HTML + CSS + JS)
 ├── worker.js                               # Cloudflare Worker (proxy CORS)
 ├── wrangler.toml                           # Config de Cloudflare Workers
+├── favicon.svg                             # Favicon
+├── LICENSE                                 # Licencia
 ├── README.md                               # Este archivo
 ├── .github/
 │   ├── scripts/

@@ -223,21 +223,20 @@
             const days = daysUntil(model.shutdownDate);
             if (days === null) return 'active';
             if (days < 0) return 'shutdown';
-            if (model.isPreview) return 'preview';
             if (days <= 30) return 'critical';
             if (days <= 90) return 'warning';
-            return 'active';
+            return 'deprecated';
         }
 
         function statusBadge(status) {
             const map = {
                 active: 'bg-green-500/20 text-green-400 border-green-500/30',
-                preview: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                deprecated: 'bg-yellow-500/10 text-yellow-400/80 border-yellow-500/20',
                 warning: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
                 critical: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
                 shutdown: 'bg-gray-500/20 text-gray-400 border-gray-500/30 line-through'
             };
-            const labels = { active: 'Active', preview: 'Preview', warning: 'Deprecating', critical: 'Critical', shutdown: 'Shutdown' };
+            const labels = { active: 'Active', deprecated: 'Deprecated', warning: 'Warning', critical: 'Critical', shutdown: 'Shutdown' };
             return `<span class="px-2 py-1 rounded-full text-xs font-medium border ${map[status]}">${labels[status]}</span>`;
         }
 
@@ -246,7 +245,7 @@
             if (days < 0) return `<span class="text-gray-500">${Math.abs(days)}d ago</span>`;
             if (days <= 30) return `<span class="text-orange-400 font-semibold">${days}d</span>`;
             if (days <= 90) return `<span class="text-yellow-400">${days}d</span>`;
-            return `<span class="text-green-400">${days}d</span>`;
+            return `<span class="text-yellow-400/70">${days}d</span>`;
         }
 
         function parseHTML(html) {
@@ -428,7 +427,7 @@
             if (currentFilter === 'active') {
                 filtered = filtered.filter(m => { const s = getModelStatus(m); return s === 'active'; });
             } else if (currentFilter === 'deprecated') {
-                filtered = filtered.filter(m => { const s = getModelStatus(m); return ['warning', 'critical', 'shutdown'].includes(s); });
+                filtered = filtered.filter(m => { const s = getModelStatus(m); return ['deprecated', 'warning', 'critical', 'shutdown'].includes(s); });
             } else if (currentFilter === 'preview') {
                 filtered = filtered.filter(m => m.isPreview);
             }
@@ -461,7 +460,7 @@
         function renderStats() {
             const total = allModels.length;
             const active = allModels.filter(m => getModelStatus(m) === 'active').length;
-            const deprecated = allModels.filter(m => ['warning', 'critical', 'shutdown'].includes(getModelStatus(m))).length;
+            const deprecated = allModels.filter(m => ['deprecated', 'warning', 'critical', 'shutdown'].includes(getModelStatus(m))).length;
             const previews = allModels.filter(m => m.isPreview).length;
 
             $('stats').innerHTML = `
@@ -541,7 +540,8 @@
                 const days = daysUntil(m.shutdownDate);
                 const isPast = days < 0;
                 const barWidth = Math.max(5, Math.min(100, days > 365 ? 100 : (days / 365) * 100));
-                const barColor = isPast ? 'bg-gray-600' : days <= 30 ? 'bg-orange-500' : days <= 90 ? 'bg-yellow-500' : 'bg-green-500';
+                const barColors = { deprecated: 'bg-yellow-500/50', warning: 'bg-yellow-500', critical: 'bg-orange-500', shutdown: 'bg-gray-600' };
+                const barColor = barColors[getModelStatus(m)];
 
                 return `
                 <div class="flex items-center gap-4 py-3 ${isPast ? 'opacity-50' : ''}">
