@@ -1,5 +1,5 @@
 const ALLOWED_TARGETS = [
-  { host: 'opencode.ai', pathPrefix: '/docs/' },
+  { host: 'opencode.ai', pathPrefix: '/v2/docs/' },
   { host: 'ai.google.dev', pathPrefix: '/gemini-api/docs/' },
 ];
 
