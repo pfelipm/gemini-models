@@ -9,7 +9,7 @@
 
 const SOURCE_MD_URL = 'https://aistudio.google.com/docs/deprecations.md';
 const SOURCE_URL = 'https://ai.google.dev/gemini-api/docs/deprecations';
-const INDEX_PATH = 'index.html';
+const DATA_PATH = 'data.js';
 
 const fs = require('fs');
 
@@ -243,14 +243,14 @@ function esc(value) {
 
 function generateFallbackCode(models) {
   const entries = models.map(m =>
-    `                { name: '${esc(m.name)}', family: '${esc(m.family)}', isPreview: ${m.isPreview}, releaseDate: '${esc(m.releaseDate)}', shutdownDate: '${esc(m.shutdownDate)}', replacement: '${esc(m.replacement)}' }`
+    `    { name: '${esc(m.name)}', family: '${esc(m.family)}', isPreview: ${m.isPreview}, releaseDate: '${esc(m.releaseDate)}', shutdownDate: '${esc(m.shutdownDate)}', replacement: '${esc(m.replacement)}' }`
   );
-  return `        function loadFallbackData() {\n            return [\n${entries.join(',\n')}\n            ];\n        }`;
+  return `const FALLBACK_MODELS = [\n${entries.join(',\n')}\n];`;
 }
 
 function generateTimestampCode() {
   const now = new Date().toISOString();
-  return `        const DATA_PARSED_AT = '${now}';`;
+  return `const DATA_PARSED_AT = '${now}';`;
 }
 
 async function main() {
@@ -270,34 +270,34 @@ async function main() {
     console.warn(`Warning: unusually low model count (${models.length}) — source layout may have changed`);
   }
 
-  console.log('Updating index.html...');
-  let indexContent = fs.readFileSync(INDEX_PATH, 'utf8');
+  console.log('Updating data.js...');
+  let dataContent = fs.readFileSync(DATA_PATH, 'utf8');
 
-  const fallbackStart = indexContent.indexOf('function loadFallbackData()');
+  const fallbackStart = dataContent.indexOf('const FALLBACK_MODELS = [');
   // Empezar el reemplazo en el inicio de línea: si no, cada ejecución acumula
-  // el indent previo y la línea crece 8 espacios por run
-  const lineStart = indexContent.lastIndexOf('\n', fallbackStart) + 1;
-  const fallbackEnd = indexContent.indexOf('}', indexContent.indexOf('];', fallbackStart)) + 1;
+  // el indent previo y la línea crece espacio a espacio por run
+  const lineStart = dataContent.lastIndexOf('\n', fallbackStart) + 1;
+  const fallbackEnd = dataContent.indexOf('];', fallbackStart) + 2;
 
   if (fallbackStart === -1) {
-    console.error('Could not find loadFallbackData function');
+    console.error('Could not find FALLBACK_MODELS constant');
     process.exit(1);
   }
 
   const newCode = generateFallbackCode(models);
-  indexContent = indexContent.slice(0, lineStart) + newCode + indexContent.slice(fallbackEnd);
+  dataContent = dataContent.slice(0, lineStart) + newCode + dataContent.slice(fallbackEnd);
 
   // El ancla ^[ \t]* con /m consume el indent de la línea y lo normaliza
   const tsRegex = /^[ \t]*const DATA_PARSED_AT = '[^']+';/m;
   const newTs = generateTimestampCode();
-  if (tsRegex.test(indexContent)) {
-    indexContent = indexContent.replace(tsRegex, newTs);
+  if (tsRegex.test(dataContent)) {
+    dataContent = dataContent.replace(tsRegex, newTs);
   } else {
-    const scriptStart = indexContent.indexOf('<script>');
-    indexContent = indexContent.slice(0, scriptStart + 8) + '\n    ' + newTs + indexContent.slice(scriptStart + 8);
+    console.error('Could not find DATA_PARSED_AT constant');
+    process.exit(1);
   }
 
-  fs.writeFileSync(INDEX_PATH, indexContent);
+  fs.writeFileSync(DATA_PATH, dataContent);
   console.log('Done!');
 }
 

@@ -57,7 +57,7 @@ Proxy CORS propio desplegado en Cloudflare Workers (tier gratuito, 100k req/día
 - Hace fetch directo a `ai.google.dev` desde el edge de Cloudflare (sin problemas de CORS); la redirección a Google AI Studio es transparente (Cloudflare la sigue)
 - Devuelve la respuesta con headers `Access-Control-Allow-Origin: *`
 - Cachea 5 minutos para reducir requests a la fuente
-- Restringe los destinos a una allowlist: `opencode.ai/v2/docs/*` y `ai.google.dev/gemini-api/docs/*` (403 fuera de ella)
+- Restringe los destinos a una allowlist: `opencode.ai/v2/docs/*`, `ai.google.dev/gemini-api/docs/*` y `aistudio.google.com/docs/*` (403 fuera de ella), incluido el endpoint markdown canónico `.md` de deprecaciones
 - Comprueba el header `Origin` (sólo `pfelipm.github.io` o `null`/ausente para uso local) como higiene anti-hotlinking. **No es un control de seguridad**: `Origin` lo controla el cliente y se puede falsificar; sólo frena el abuso oportunista desde otras webs
 - Riesgo aceptado: un atacante determinado (p. ej. con automatización de navegador sobre los propios dashboards) puede agotar la cuota free (100k req/día). La mitigación real es la degradación elegante: sin worker, los dashboards caen a sus datos de respaldo, refrescados cada 6h por GitHub Actions
 - Compartido con el dashboard [opencode-zen-precios](https://github.com/pfelipm/opencode-zen-precios)
@@ -69,7 +69,7 @@ Workflow automatizado que mantiene el fallback data actualizado:
 
 - Se ejecuta cada 6 horas (`cron: '0 */6 * * *'`)
 - Hace fetch al endpoint markdown canónico de AI Studio (`aistudio.google.com/docs/deprecations.md`), con fallback a la URL clásica de `ai.google.dev` (sin CORS en ningún caso)
-- Parsea los modelos y actualiza `loadFallbackData()` en `index.html`
+- Parsea los modelos y actualiza `FALLBACK_MODELS` en `data.js` (los datos viven separados de la lógica del SPA: el Action nunca toca `index.html`)
 - Aborta sin commitear si el parseo devuelve 0 modelos: un cambio de formato en la fuente falla de forma visible, no silenciosa
 - Actualiza la constante `DATA_PARSED_AT` con la fecha/hora del parseo
 - Hace commit y push automático si hay cambios
@@ -93,7 +93,7 @@ Reglas del parser:
 
 ### Datos de respaldo
 
-`loadFallbackData()` es un array de modelos embebido en el archivo, actualizado automáticamente por el GitHub Action cada 6 horas. Se usa como fuente principal al cargar la página y como respaldo cuando todas las peticiones de red fallan. Es navegable inmediatamente al abrir la página.
+`data.js` exporta el global `FALLBACK_MODELS` (array de modelos), actualizado automáticamente por el GitHub Action cada 6 horas. Se usa como fuente principal al cargar la página y como respaldo cuando todas las peticiones de red fallan. Es navegable inmediatamente al abrir la página.
 
 Familias (al momento de escribir esto):
 - Gemini 3 models, Gemini 2.5 Pro models, Gemini 2.5 Flash models, Gemini 2.0 models

@@ -1,6 +1,9 @@
 const ALLOWED_TARGETS = [
   { host: 'opencode.ai', pathPrefix: '/v2/docs/' },
   { host: 'ai.google.dev', pathPrefix: '/gemini-api/docs/' },
+  // Endpoint markdown canónico anunciado en llms.txt; el proxy lo sirve con
+  // Content-Type text/html, irrelevante porque el navegador hace resp.text().
+  { host: 'aistudio.google.com', pathPrefix: '/docs/' },
 ];
 
 // Higiene anti-hotlinking: sólo los dashboards en GitHub Pages o uso local
