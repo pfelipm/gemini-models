@@ -179,7 +179,7 @@
 
     <script>
     (function() {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        const DATA_PARSED_AT = '2026-11-02T14:41:27.977Z';
+        const DATA_PARSED_AT = '2026-11-07T08:53:47.049Z';
         let dataParsedAt = DATA_PARSED_AT;
         const WORKER_URL = 'https://docs-cors-proxy.pfelipm.workers.dev';
         const FETCH_TARGETS = [
@@ -248,7 +248,126 @@
             return `<span class="text-yellow-400/70">${days}d</span>`;
         }
 
-        function parseHTML(html) {
+        function decodeEntities(s) {
+            return s.replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+                    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+        }
+
+        // La página fuente migró a Google AI Studio (app Angular): la URL clásica
+        // redirige y sirve un shell HTML cuyo markdown fuente va embebido en
+        // <noscript><pre>. El endpoint .md canónico ya devuelve markdown limpio.
+        // Este extractor cubre ambos formatos de respuesta.
+        function extractMarkdown(text) {
+            if (/<html/i.test(text) || /<!doctype/i.test(text)) {
+                const m = text.match(/<noscript>\s*<pre[^>]*>([\s\S]*?)<\/pre>/i);
+                return m ? decodeEntities(m[1]) : '';
+            }
+            return text;
+        }
+
+        function cleanCellText(text) {
+            return decodeEntities(text)
+                .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // [texto](url) → texto
+                .replace(/`/g, '')
+                .trim();
+        }
+
+        // Un bloque {% table %} ... {% /table %}: las filas son grupos de bullets
+        // ("* celda") separados por "---". La primera fila es el header.
+        function parseMarkdownTable(block, family, previewCtx) {
+            const models = [];
+
+            const rows = [];
+            let current = [];
+            for (const line of block) {
+                if (/^\s*---\s*$/.test(line)) {
+                    if (current.length) rows.push(current);
+                    current = [];
+                } else if (/^\s*\*\s?/.test(line)) {
+                    current.push(line.replace(/^\s*\*\s?/, ''));
+                }
+            }
+            if (current.length) rows.push(current);
+            if (rows.length < 2) return models;
+
+            // Exigir "Model" como primera celda descarta las tablas de agentes
+            // (header "Agent") y otras que no sean listas de modelos.
+            const header = rows[0].map(cleanCellText);
+            if ((header[0] || '').toLowerCase() !== 'model') return models;
+
+            for (const row of rows.slice(1)) {
+                const cells = row.map(cleanCellText);
+                if (cells.length < 3) continue;
+
+                const modelName = cells[0] || '';
+                if (!modelName || modelName.includes('|') || !isValidModelName(modelName)) continue;
+
+                // El replacement puede traer prosa entre paréntesis: quedarnos con el nombre
+                let replacement = (cells[3] || '').trim();
+                const paren = replacement.indexOf('(');
+                if (paren > 0) replacement = replacement.slice(0, paren).trim();
+
+                models.push({
+                    name: modelName,
+                    family: family,
+                    isPreview: previewCtx || modelName.toLowerCase().includes('preview'),
+                    releaseDate: cells[1] || '',
+                    shutdownDate: cells[2] || '',
+                    replacement: replacement
+                });
+            }
+
+            return models;
+        }
+
+        // "## Familia models" fija la familia; "### Preview models" marca contexto
+        // preview hasta el siguiente heading; el resto de subsecciones no.
+        function parseMarkdownData(md) {
+            const models = [];
+            const lines = md.split('\n');
+            let family = '';
+            let previewCtx = false;
+            let i = 0;
+
+            while (i < lines.length) {
+                const line = lines[i];
+
+                const h2 = line.match(/^##\s+([^{%]+?)\s*(?:\{|$)/);
+                if (h2) {
+                    family = h2[1].trim();
+                    previewCtx = false;
+                    i++;
+                    continue;
+                }
+
+                const h3 = line.match(/^###\s+(.+?)\s*(?:\{|$)/);
+                if (h3) {
+                    previewCtx = /^preview/i.test(h3[1].trim());
+                    i++;
+                    continue;
+                }
+
+                if (/^\s*\{%\s*table\s*%\}/.test(line)) {
+                    const block = [];
+                    i++;
+                    while (i < lines.length && !/^\s*\{%\s*\/table\s*%\}/.test(lines[i])) {
+                        block.push(lines[i]);
+                        i++;
+                    }
+                    i++; // consumir {% /table %}
+                    models.push(...parseMarkdownTable(block, family, previewCtx));
+                    continue;
+                }
+
+                i++;
+            }
+
+            return models;
+        }
+
+        // Parser legacy del formato HTML antiguo (<h2> + <table>), por si la
+        // fuente revierte la migración. Último recurso si el markdown no parsea.
+        function parseLegacyHTML(html) {
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
             const models = [];
@@ -273,6 +392,15 @@
             }
 
             return models;
+        }
+
+        function parseHTML(html) {
+            const md = extractMarkdown(html);
+            if (md) {
+                const models = parseMarkdownData(md);
+                if (models.length > 0) return models;
+            }
+            return parseLegacyHTML(html);
         }
 
         function isValidModelName(name) {
@@ -341,23 +469,33 @@
             }
         }
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                function loadFallbackData() {
+        function loadFallbackData() {
             return [
                 { name: 'gemini-3.8-flash-tts', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 22, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.8-flash-lite-tts', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 22, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.8-live', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 15, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.8-live-extended-thinking', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 15, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.8-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 2, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
-                { name: 'gemini-3.7-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'August 13, 2026', shutdownDate: 'N/A', replacement: 'gemini-3.8-flash (not available to select in Google AI Studio; the endpoint is not shutting down and automatically routes API requests to gemini-3.8-flash)' },
+                { name: 'gemini-3.7-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'August 13, 2026', shutdownDate: 'N/A', replacement: 'gemini-3.8-flash' },
                 { name: 'gemini-3.6-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'July 21, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.5-flash-lite', family: 'Gemini 3 models', isPreview: false, releaseDate: 'July 21, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
-                { name: 'gemini-3.5-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 19, 2026', shutdownDate: 'N/A', replacement: 'gemini-3.6-flash (not available to select in Google AI Studio; the endpoint is not shutting down and automatically routes API requests to gemini-3.6-flash)' },
+                { name: 'gemini-3.5-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 19, 2026', shutdownDate: 'N/A', replacement: 'gemini-3.6-flash' },
                 { name: 'gemini-3.1-flash-lite', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 7, 2026', shutdownDate: 'May 7, 2027', replacement: 'gemini-3.5-flash-lite' },
                 { name: 'gemini-3.1-flash-tts-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 26, 2026', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
                 { name: 'gemini-3.1-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 19, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3-flash-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'December 17, 2025', shutdownDate: 'No shutdown date announced', replacement: 'gemini-3.6-flash' },
                 { name: 'gemini-3-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'November 18, 2025', shutdownDate: 'March 9, 2026', replacement: 'gemini-3.1-pro-preview' },
                 { name: 'gemini-3.1-flash-lite-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'March 3, 2026', shutdownDate: 'May 25, 2026', replacement: 'gemini-3.1-flash-lite' },
+                { name: 'gemini-2.5-pro', family: 'Gemini 2.5 Pro models', isPreview: false, releaseDate: 'June 17, 2025', shutdownDate: 'December 1, 2026', replacement: 'gemini-3.8-flash' },
+                { name: 'gemini-2.5-computer-use-preview-10-2025', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'October 7, 2025', shutdownDate: 'July 28, 2026', replacement: 'gemini-3.8-flash' },
+                { name: 'gemini-2.5-pro-preview-03-25', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'March 3, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.8-flash' },
+                { name: 'gemini-2.5-pro-preview-05-06', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'May 6, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.8-flash' },
+                { name: 'gemini-2.5-pro-preview-06-05', family: 'Gemini 2.5 Pro models', isPreview: true, releaseDate: 'June 5, 2025', shutdownDate: 'December 2, 2025', replacement: 'gemini-3.8-flash' },
+                { name: 'gemini-2.5-flash', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'June 17, 2025', shutdownDate: 'December 1, 2026', replacement: 'gemini-3.5-flash-lite' },
+                { name: 'gemini-2.5-flash-lite', family: 'Gemini 2.5 Flash models', isPreview: false, releaseDate: 'July 22, 2025', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'gemini-2.5-flash-lite-preview-09-2025', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'March 31, 2026', replacement: 'gemini-3.1-flash-lite' },
+                { name: 'gemini-2.5-flash-preview-05-20', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'November 18, 2025', replacement: 'gemini-3.6-flash' },
+                { name: 'gemini-2.5-flash-preview-09-2025', family: 'Gemini 2.5 Flash models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'February 17, 2026', replacement: 'gemini-3.6-flash' },
                 { name: 'gemini-2.0-flash', family: 'Gemini 2.0 models', isPreview: false, releaseDate: 'February 5, 2025', shutdownDate: 'June 1, 2026', replacement: 'gemini-3.6-flash' },
                 { name: 'gemini-2.0-flash-001', family: 'Gemini 2.0 models', isPreview: false, releaseDate: 'February 5, 2025', shutdownDate: 'June 1, 2026', replacement: 'gemini-3.6-flash' },
                 { name: 'gemini-2.0-flash-lite', family: 'Gemini 2.0 models', isPreview: false, releaseDate: 'February 25, 2025', shutdownDate: 'June 1, 2026', replacement: 'gemini-3.1-flash-lite' },
@@ -367,22 +505,22 @@
                 { name: 'gemini-3.8-live', family: 'Live API models', isPreview: false, releaseDate: 'September 15, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.8-live-extended-thinking', family: 'Live API models', isPreview: false, releaseDate: 'September 15, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.5-transcribe-live', family: 'Live API models', isPreview: false, releaseDate: 'August 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
-                { name: 'gemini-2.0-flash-live-001', family: 'Live API models', isPreview: false, releaseDate: 'April 9, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-3.8-live' },
                 { name: 'gemini-3.5-live-translate-preview', family: 'Live API models', isPreview: true, releaseDate: 'June 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.1-flash-live-preview', family: 'Live API models', isPreview: true, releaseDate: 'March 11, 2026', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-live' },
                 { name: 'gemini-2.5-flash-native-audio-preview-12-2025', family: 'Live API models', isPreview: true, releaseDate: 'December 12, 2025', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-live' },
                 { name: 'gemini-live-2.5-flash-preview', family: 'Live API models', isPreview: true, releaseDate: 'June 17, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-3.8-live' },
+                { name: 'gemini-2.0-flash-live-001', family: 'Live API models', isPreview: false, releaseDate: 'April 9, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-3.8-live' },
                 { name: 'gemini-3.5-transcribe', family: 'Audio models', isPreview: false, releaseDate: 'August 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-2.5-flash-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
                 { name: 'gemini-2.5-pro-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
                 { name: 'gemini-embedding-2', family: 'Embedding models', isPreview: false, releaseDate: 'April 22, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-embedding-001', family: 'Embedding models', isPreview: false, releaseDate: 'July 14, 2025', shutdownDate: 'May 14, 2028', replacement: 'gemini-embedding-2' },
+                { name: 'gemini-embedding-2-preview', family: 'Embedding models', isPreview: true, releaseDate: 'March 10, 2026', shutdownDate: 'November 6, 2026', replacement: 'gemini-embedding-2' },
                 { name: 'text-embedding-004', family: 'Embedding models', isPreview: false, releaseDate: 'April 9, 2024', shutdownDate: 'January 14, 2026', replacement: 'gemini-embedding-2' },
-                { name: 'embedding-2-preview', family: 'Embedding models', isPreview: true, releaseDate: 'March 10, 2026', shutdownDate: 'August 10, 2026', replacement: 'gemini-embedding-2' },
-                { name: 'embedding-001', family: 'Embedding models', isPreview: true, releaseDate: 'April 9, 2024', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
-                { name: 'embedding-gecko-001', family: 'Embedding models', isPreview: true, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
-                { name: 'gemini-embedding-exp', family: 'Embedding models', isPreview: true, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
-                { name: 'gemini-embedding-exp-03-07', family: 'Embedding models', isPreview: true, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'embedding-001', family: 'Embedding models', isPreview: false, releaseDate: 'April 9, 2024', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'embedding-gecko-001', family: 'Embedding models', isPreview: false, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'gemini-embedding-exp', family: 'Embedding models', isPreview: false, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
+                { name: 'gemini-embedding-exp-03-07', family: 'Embedding models', isPreview: false, releaseDate: '', shutdownDate: 'October 30, 2025', replacement: 'gemini-embedding-2' },
                 { name: 'gemini-nano-banana-2.1', family: 'Nano Banana models', isPreview: false, releaseDate: 'October 6, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.1-flash-lite-image', family: 'Nano Banana models', isPreview: false, releaseDate: 'June 30, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'gemini-3.1-flash-image', family: 'Nano Banana models', isPreview: false, releaseDate: 'May 28, 2026', shutdownDate: 'No shutdown date announced', replacement: 'gemini-nano-banana-2.1' },
@@ -395,19 +533,20 @@
                 { name: 'imagen-4.0-generate-001', family: 'Imagen models', isPreview: false, releaseDate: 'June 24, 2025', shutdownDate: 'August 17, 2026', replacement: 'gemini-nano-banana-2.1' },
                 { name: 'imagen-4.0-ultra-generate-001', family: 'Imagen models', isPreview: false, releaseDate: 'June 24, 2025', shutdownDate: 'August 17, 2026', replacement: 'gemini-nano-banana-2.1' },
                 { name: 'imagen-4.0-fast-generate-001', family: 'Imagen models', isPreview: false, releaseDate: 'June 24, 2025', shutdownDate: 'August 17, 2026', replacement: 'gemini-nano-banana-2.1' },
-                { name: 'imagen-3.0-generate-002', family: 'Imagen models', isPreview: false, releaseDate: 'February 6, 2025', shutdownDate: 'November 10, 2025', replacement: 'gemini-nano-banana-2.1' },
                 { name: 'imagen-4.0-generate-preview-06-06', family: 'Imagen models', isPreview: true, releaseDate: 'June 24, 2025', shutdownDate: 'February 17, 2026', replacement: 'gemini-nano-banana-2.1' },
                 { name: 'imagen-4.0-ultra-generate-preview-06-06', family: 'Imagen models', isPreview: true, releaseDate: 'June 24, 2025', shutdownDate: 'February 17, 2026', replacement: 'gemini-nano-banana-2.1' },
-                { name: 'veo-3.0-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'September 9, 2025', shutdownDate: 'June 30, 2026', replacement: 'gemini-omni-1.1-flashor the GA models on the Gemini Enterprise Agent Platform' },
-                { name: 'veo-3.0-fast-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'September 9, 2025', shutdownDate: 'June 30, 2026', replacement: 'gemini-omni-1.1-flashor the GA models on the Gemini Enterprise Agent Platform' },
-                { name: 'veo-2.0-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'April 9, 2025', shutdownDate: 'June 30, 2026', replacement: 'gemini-omni-1.1-flashor the GA models on the Gemini Enterprise Agent Platform' },
-                { name: 'veo-3.1-lite-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'March 31, 2026', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.1-flash' },
-                { name: 'veo-3.1-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'October 15, 2025', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.1-flash' },
-                { name: 'veo-3.1-fast-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'October 15, 2025', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.1-flash' },
-                { name: 'veo-3.0-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'July 31, 2025', shutdownDate: 'November 12, 2025', replacement: 'gemini-omni-1.1-flash' },
-                { name: 'veo-3.0-fast-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'July 31, 2025', shutdownDate: 'November 12, 2025', replacement: 'gemini-omni-1.1-flash' },
-                { name: 'gemini-omni-1.1-flash', family: 'Gemini Omni Flash models', isPreview: false, releaseDate: 'August 27, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
-                { name: 'gemini-omni-flash-preview', family: 'Gemini Omni Flash models', isPreview: true, releaseDate: 'June 30, 2026', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.1-flash' },
+                { name: 'imagen-3.0-generate-002', family: 'Imagen models', isPreview: false, releaseDate: 'February 6, 2025', shutdownDate: 'November 10, 2025', replacement: 'gemini-nano-banana-2.1' },
+                { name: 'veo-3.1-lite-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'March 31, 2026', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.2-flash' },
+                { name: 'veo-3.1-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'October 15, 2025', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.2-flash' },
+                { name: 'veo-3.1-fast-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'October 15, 2025', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.2-flash' },
+                { name: 'veo-3.0-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'September 9, 2025', shutdownDate: 'June 30, 2026', replacement: 'gemini-omni-1.2-flash or the GA models on the Gemini Enterprise Agent Platform' },
+                { name: 'veo-3.0-fast-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'September 9, 2025', shutdownDate: 'June 30, 2026', replacement: 'gemini-omni-1.2-flash or the GA models on the Gemini Enterprise Agent Platform' },
+                { name: 'veo-2.0-generate-001', family: 'Veo models', isPreview: false, releaseDate: 'April 9, 2025', shutdownDate: 'June 30, 2026', replacement: 'gemini-omni-1.2-flash or the GA models on the Gemini Enterprise Agent Platform' },
+                { name: 'veo-3.0-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'July 31, 2025', shutdownDate: 'November 12, 2025', replacement: 'gemini-omni-1.2-flash' },
+                { name: 'veo-3.0-fast-generate-preview', family: 'Veo models', isPreview: true, releaseDate: 'July 31, 2025', shutdownDate: 'November 12, 2025', replacement: 'gemini-omni-1.2-flash' },
+                { name: 'gemini-omni-1.2-flash', family: 'Gemini Omni Flash models', isPreview: false, releaseDate: 'November 5, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+                { name: 'gemini-omni-1.1-flash', family: 'Gemini Omni Flash models', isPreview: false, releaseDate: 'August 27, 2026', shutdownDate: 'December 3, 2026', replacement: 'gemini-omni-1.2-flash' },
+                { name: 'gemini-omni-flash-preview', family: 'Gemini Omni Flash models', isPreview: true, releaseDate: 'June 30, 2026', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.2-flash' },
                 { name: 'lyria-3.5', family: 'Lyria models', isPreview: false, releaseDate: 'September 3, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'lyria-3-clip-preview', family: 'Lyria models', isPreview: true, releaseDate: 'March 25, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
                 { name: 'lyria-3-pro-preview', family: 'Lyria models', isPreview: true, releaseDate: 'March 25, 2026', shutdownDate: 'No shutdown date announced', replacement: 'lyria-3.5' },

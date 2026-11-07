@@ -19,7 +19,7 @@ Dashboard interactivo de página única para monitorizar en tiempo real el ciclo
 | Marcado | HTML5 vanilla |
 | Estilos | TailwindCSS vía CDN + CSS custom |
 | Lógica | ES6+ vanilla (sin frameworks, sin dependencias) |
-| Fuente de datos | HTML remoto scrapeado en tiempo de ejecución vía `fetch()` |
+| Fuente de datos | Markdown remoto (docs de Google AI Studio) parseado en tiempo de ejecución vía `fetch()` |
 | Despliegue | Archivo estático — sirve desde cualquier sitio o abre localmente |
 
 Cero dependencias npm. Cero paso de build. Un archivo.
@@ -48,12 +48,14 @@ El dashboard usa una estrategia de **renderizado inmediato con actualización en
 
 La página renderiza instantáneamente con los datos en caché. Si algún fetch responde, los datos se actualizan automáticamente y el indicador cambia de "Cached" a "Live".
 
+Nota: la URL clásica de `ai.google.dev` redirige ahora a Google AI Studio. La redirección es transparente para el worker y para `fetch` — ambos reciben el mismo contenido; el parseo se describe más abajo.
+
 ### Cloudflare Worker (`worker.js`)
 
 Proxy CORS propio desplegado en Cloudflare Workers (tier gratuito, 100k req/día):
 
-- Hace fetch directo a `ai.google.dev` desde el edge de Cloudflare (sin problemas de CORS)
-- Devuelve el HTML con headers `Access-Control-Allow-Origin: *`
+- Hace fetch directo a `ai.google.dev` desde el edge de Cloudflare (sin problemas de CORS); la redirección a Google AI Studio es transparente (Cloudflare la sigue)
+- Devuelve la respuesta con headers `Access-Control-Allow-Origin: *`
 - Cachea 5 minutos para reducir requests a la fuente
 - Restringe los destinos a una allowlist: `opencode.ai/v2/docs/*` y `ai.google.dev/gemini-api/docs/*` (403 fuera de ella)
 - Comprueba el header `Origin` (sólo `pfelipm.github.io` o `null`/ausente para uso local) como higiene anti-hotlinking. **No es un control de seguridad**: `Origin` lo controla el cliente y se puede falsificar; sólo frena el abuso oportunista desde otras webs
@@ -66,26 +68,28 @@ Proxy CORS propio desplegado en Cloudflare Workers (tier gratuito, 100k req/día
 Workflow automatizado que mantiene el fallback data actualizado:
 
 - Se ejecuta cada 6 horas (`cron: '0 */6 * * *'`)
-- Hace fetch directo a `ai.google.dev` desde los servidores de GitHub (sin CORS)
+- Hace fetch al endpoint markdown canónico de AI Studio (`aistudio.google.com/docs/deprecations.md`), con fallback a la URL clásica de `ai.google.dev` (sin CORS en ningún caso)
 - Parsea los modelos y actualiza `loadFallbackData()` en `index.html`
+- Aborta sin commitear si el parseo devuelve 0 modelos: un cambio de formato en la fuente falla de forma visible, no silenciosa
 - Actualiza la constante `DATA_PARSED_AT` con la fecha/hora del parseo
 - Hace commit y push automático si hay cambios
 - Se puede ejecutar manualmente desde GitHub Actions
 
-### Parseo de HTML (`parseHTML`)
+### Parseo de la fuente (`parseHTML`)
 
-La página de Google contiene tablas organizadas por familias de modelos. El parser usa `DOMParser` para extraer:
+La página de deprecaciones migró de `ai.google.dev` (HTML estático) a **Google AI Studio** (app Angular). La URL clásica redirige y sirve un shell HTML cuyo markdown fuente va embebido en `<noscript><pre>`; además existe un endpoint markdown canónico, `aistudio.google.com/docs/deprecations.md`, anunciado en `llms.txt`. `parseHTML` acepta ambas respuestas: extrae el markdown (decodificando entidades HTML si viene del shell) y lo parsea. El parser legacy del formato HTML antiguo se conserva como último recurso.
 
-| Elemento | Identificado por | Campos extraídos |
+| Elemento markdown | Identificado por | Campos extraídos |
 |----------|-----------------|------------------|
-| **Encabezados** | `<h2>`, `<h3>` que contienen "Gemini" o "model" | Nombre de la familia |
-| **Tablas** | `<table>` siguientes a cada encabezado | `name`, `releaseDate`, `shutdownDate`, `replacement` |
+| **Encabezados de familia** | `## Familia models` (texto antes del tag `{% id=... %}`) | `family` |
+| **Subsecciones** | `### Preview models` / `### Deprecated models` | contexto `isPreview` para las tablas de esa subsección |
+| **Tablas** | bloques `{% table %}` … `{% /table %}`: filas de bullets (`* celda`) separadas por `---` | `name`, `releaseDate`, `shutdownDate`, `replacement` |
 
-**Nota**: Las tablas usan `<td><b>Header</b></td>` en lugar de `<th>` para los encabezados. La detección de la fila de header se hace por contenido (celdas que contienen "model" y "date") en lugar de por nombre de tag.
-
-La validación de modelos (`isValidModelName`) filtra filas que no son modelos válidos:
-- Debe tener al menos un guión (estructura `familia-version-nombre`)
-- Ejemplos válidos: `gemini-3.5-flash`, `gemini-2.5-pro-preview-06-05`, `text-embedding-004`
+Reglas del parser:
+- La primera fila de cada tabla es el header: se exige "Model" como primera celda, lo que excluye las tablas de agentes (header "Agent") y cualquier otra que no sea una lista de modelos
+- El `replacement` puede traer prosa entre paréntesis ("`gemini-3.8-flash` (`gemini-2.5-pro` is no longer available…)"): se recorta en el primer paréntesis
+- La validación de modelos (`isValidModelName`) sigue igual: al menos un guión (estructura `familia-version-nombre`), p. ej. `gemini-3.8-flash`, `gemini-2.5-pro-preview-06-05`, `text-embedding-004`
+- El Action prefiere el endpoint `.md` (markdown limpio); el navegador parsea el híbrido que devuelve el worker tras la redirección — ambos caminos producen el mismo dataset
 
 ### Datos de respaldo
 
@@ -93,8 +97,10 @@ La validación de modelos (`isValidModelName`) filtra filas que no son modelos v
 
 Familias (al momento de escribir esto):
 - Gemini 3 models, Gemini 2.5 Pro models, Gemini 2.5 Flash models, Gemini 2.0 models
-- Live API models, Audio models, Embedding models, Imagen models
-- Veo models, Lyria models, Robotics models
+- Live API models, Audio models, Embedding models, Nano Banana models, Imagen models
+- Veo models, Gemini Omni Flash models, Lyria models, Robotics models
+
+La fuente también lista "Managed agents" (agentes, no modelos): el parser los excluye exigiendo "Model" como header de tabla.
 
 ---
 
@@ -231,7 +237,7 @@ python3 -m http.server 8000
 ## Limitaciones
 
 - **CORS**: El fetch directo a `ai.google.dev` será bloqueado por la política de same-origin cuando se abre como `file://`. En GitHub Pages el origin es válido, pero Google podría no enviar CORS headers. El Cloudflare Worker propio resuelve este problema.
-- **Fragilidad del parseo**: Si la estructura de la página fuente cambia (encabezados, orden de columnas), el parser puede romperse. Los datos de respaldo aseguran que el dashboard siempre funcione.
+- **Fragilidad del parseo**: La fuente ya cambió de formato una vez (HTML estático → markdown embebido en un shell Angular, noviembre de 2026), y puede volver a cambiar. Si rompe el parser: el Action aborta sin commitear (fallo visible en GitHub) y el navegador cae a los datos de respaldo. El parser legacy del formato HTML antiguo se conserva como último recurso.
 - **Datos en caché**: El GitHub Action actualiza automáticamente el fallback data cada 6 horas.
 - **Sin persistencia**: El estado de filtros y ordenamiento está solo en memoria — se pierde al recargar la página.
 - **Sin componente de servidor**: Toda la computación es del lado del cliente. No se necesitan claves de API.
