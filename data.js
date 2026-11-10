@@ -5,9 +5,11 @@
 // Este archivo vive separado de index.html a propósito: es el objetivo del
 // Action, de modo que el patching de datos nunca toca la lógica del SPA.
 // Script clásico (no módulo) para que el fallback también funcione por file://.
-const DATA_PARSED_AT = '2026-11-10T14:15:59.752Z';
+const DATA_PARSED_AT = '2026-11-10T22:47:36.260Z';
 
 const FALLBACK_MODELS = [
+    { name: 'gemini-4-carbon', family: 'Gemini 4 models', isPreview: false, releaseDate: 'November 10, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+    { name: 'gemini-4-argon', family: 'Gemini 4 models', isPreview: false, releaseDate: 'October 13, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-3.8-flash-tts', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 22, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-3.8-flash-lite-tts', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 22, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-3.8-live', family: 'Gemini 3 models', isPreview: false, releaseDate: 'September 15, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
