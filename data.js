@@ -5,7 +5,7 @@
 // Este archivo vive separado de index.html a propósito: es el objetivo del
 // Action, de modo que el patching de datos nunca toca la lógica del SPA.
 // Script clásico (no módulo) para que el fallback también funcione por file://.
-const DATA_PARSED_AT = '2026-11-11T13:29:53.510Z';
+const DATA_PARSED_AT = '2026-11-11T23:59:52.350Z';
 
 const FALLBACK_MODELS = [
     { name: 'gemini-4-carbon', family: 'Gemini 4 models', isPreview: false, releaseDate: 'November 10, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
@@ -93,5 +93,6 @@ const FALLBACK_MODELS = [
     { name: 'gemini-robotics-er-2-preview', family: 'Robotics models', isPreview: true, releaseDate: 'July 30, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-robotics-er-2-streaming-preview', family: 'Robotics models', isPreview: true, releaseDate: 'July 30, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-robotics-er-1.6-preview', family: 'Robotics models', isPreview: true, releaseDate: 'April 14, 2026', shutdownDate: 'August 31, 2026', replacement: 'gemini-robotics-er-2-preview' },
-    { name: 'gemini-robotics-er-1.5-preview', family: 'Robotics models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'April 30, 2026', replacement: 'gemini-robotics-er-2-preview' }
+    { name: 'gemini-robotics-er-1.5-preview', family: 'Robotics models', isPreview: true, releaseDate: 'September 25, 2025', shutdownDate: 'April 30, 2026', replacement: 'gemini-robotics-er-2-preview' },
+    { name: 'gemini-decision-1', family: 'Gemini Decision models', isPreview: false, releaseDate: 'November 11, 2026', shutdownDate: 'No shutdown date announced', replacement: '' }
 ];
