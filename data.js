@@ -5,7 +5,7 @@
 // Este archivo vive separado de index.html a propósito: es el objetivo del
 // Action, de modo que el patching de datos nunca toca la lógica del SPA.
 // Script clásico (no módulo) para que el fallback también funcione por file://.
-const DATA_PARSED_AT = '2026-11-13T13:52:35.295Z';
+const DATA_PARSED_AT = '2026-11-13T23:12:21.120Z';
 
 const FALLBACK_MODELS = [
     { name: 'gemini-4-hydrogen', family: 'Gemini 4 models', isPreview: false, releaseDate: 'November 12, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
@@ -21,7 +21,7 @@ const FALLBACK_MODELS = [
     { name: 'gemini-3.5-flash-lite', family: 'Gemini 3 models', isPreview: false, releaseDate: 'July 21, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-3.5-flash', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 19, 2026', shutdownDate: 'N/A', replacement: 'gemini-3.6-flash' },
     { name: 'gemini-3.1-flash-lite', family: 'Gemini 3 models', isPreview: false, releaseDate: 'May 7, 2026', shutdownDate: 'May 7, 2027', replacement: 'gemini-3.5-flash-lite' },
-    { name: 'gemini-3.1-flash-tts-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 26, 2026', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
+    { name: 'gemini-3.1-flash-tts-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 26, 2026', shutdownDate: 'December 18, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
     { name: 'gemini-3.1-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'February 19, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-3-flash-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'December 17, 2025', shutdownDate: 'No shutdown date announced', replacement: 'gemini-3.6-flash' },
     { name: 'gemini-3-pro-preview', family: 'Gemini 3 models', isPreview: true, releaseDate: 'November 18, 2025', shutdownDate: 'March 9, 2026', replacement: 'gemini-3.1-pro-preview' },
@@ -46,13 +46,13 @@ const FALLBACK_MODELS = [
     { name: 'gemini-3.8-live-extended-thinking', family: 'Live API models', isPreview: false, releaseDate: 'September 15, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-3.5-transcribe-live', family: 'Live API models', isPreview: false, releaseDate: 'August 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-3.5-live-translate-preview', family: 'Live API models', isPreview: true, releaseDate: 'June 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
-    { name: 'gemini-3.1-flash-live-preview', family: 'Live API models', isPreview: true, releaseDate: 'March 11, 2026', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-live' },
-    { name: 'gemini-2.5-flash-native-audio-preview-12-2025', family: 'Live API models', isPreview: true, releaseDate: 'December 12, 2025', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-live' },
+    { name: 'gemini-3.1-flash-live-preview', family: 'Live API models', isPreview: true, releaseDate: 'March 11, 2026', shutdownDate: 'No shutdown date announced', replacement: 'gemini-3.8-live' },
+    { name: 'gemini-2.5-flash-native-audio-preview-12-2025', family: 'Live API models', isPreview: true, releaseDate: 'December 12, 2025', shutdownDate: 'March 31, 2027', replacement: 'gemini-3.8-live' },
     { name: 'gemini-live-2.5-flash-preview', family: 'Live API models', isPreview: true, releaseDate: 'June 17, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-3.8-live' },
     { name: 'gemini-2.0-flash-live-001', family: 'Live API models', isPreview: false, releaseDate: 'April 9, 2025', shutdownDate: 'December 9, 2025', replacement: 'gemini-3.8-live' },
     { name: 'gemini-3.5-transcribe', family: 'Audio models', isPreview: false, releaseDate: 'August 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
-    { name: 'gemini-2.5-flash-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
-    { name: 'gemini-2.5-pro-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'November 17, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
+    { name: 'gemini-2.5-flash-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'December 18, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
+    { name: 'gemini-2.5-pro-preview-tts', family: 'Audio models', isPreview: true, releaseDate: 'May 20, 2025', shutdownDate: 'December 18, 2026', replacement: 'gemini-3.8-flash-tts or gemini-3.8-flash-lite-tts' },
     { name: 'gemini-embedding-2', family: 'Embedding models', isPreview: false, releaseDate: 'April 22, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-embedding-001', family: 'Embedding models', isPreview: false, releaseDate: 'July 14, 2025', shutdownDate: 'May 14, 2028', replacement: 'gemini-embedding-2' },
     { name: 'gemini-embedding-2-preview', family: 'Embedding models', isPreview: true, releaseDate: 'March 10, 2026', shutdownDate: 'November 6, 2026', replacement: 'gemini-embedding-2' },
