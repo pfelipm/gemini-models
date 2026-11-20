@@ -5,7 +5,7 @@
 // Este archivo vive separado de index.html a propósito: es el objetivo del
 // Action, de modo que el patching de datos nunca toca la lógica del SPA.
 // Script clásico (no módulo) para que el fallback también funcione por file://.
-const DATA_PARSED_AT = '2026-11-20T00:15:28.994Z';
+const DATA_PARSED_AT = '2026-11-20T14:51:09.390Z';
 
 const FALLBACK_MODELS = [
     { name: 'gemini-4-neon', family: 'Gemini 4 models', isPreview: false, releaseDate: 'November 18, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
@@ -88,7 +88,7 @@ const FALLBACK_MODELS = [
     { name: 'gemini-omni-1.2-flash', family: 'Gemini Omni Flash models', isPreview: false, releaseDate: 'November 5, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'gemini-omni-1.1-flash', family: 'Gemini Omni Flash models', isPreview: false, releaseDate: 'August 27, 2026', shutdownDate: 'December 3, 2026', replacement: 'gemini-omni-1.2-flash' },
     { name: 'gemini-omni-flash-preview', family: 'Gemini Omni Flash models', isPreview: true, releaseDate: 'June 30, 2026', shutdownDate: 'October 22, 2026', replacement: 'gemini-omni-1.2-flash' },
-    { name: 'models/genie-4', family: 'Genie models', isPreview: false, releaseDate: 'November 19, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
+    { name: 'genie-4', family: 'Genie models', isPreview: false, releaseDate: 'November 19, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'lyria-3.5', family: 'Lyria models', isPreview: false, releaseDate: 'September 3, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'lyria-3-clip-preview', family: 'Lyria models', isPreview: true, releaseDate: 'March 25, 2026', shutdownDate: 'No shutdown date announced', replacement: '' },
     { name: 'lyria-3-pro-preview', family: 'Lyria models', isPreview: true, releaseDate: 'March 25, 2026', shutdownDate: 'No shutdown date announced', replacement: 'lyria-3.5' },
