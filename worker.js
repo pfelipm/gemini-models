@@ -1,4 +1,8 @@
 const ALLOWED_TARGETS = [
+  { host: 'opencode.ai', pathPrefix: '/docs/' },
+  // Legado: la docs de OpenCode vivía en /v2/docs/* y desde el 21-11-2026
+  // 301-redirige a /docs/*. Se mantiene por si algún cliente cacheado
+  // pide aún la URL antigua.
   { host: 'opencode.ai', pathPrefix: '/v2/docs/' },
   { host: 'ai.google.dev', pathPrefix: '/gemini-api/docs/' },
   // Endpoint markdown canónico anunciado en llms.txt; el proxy lo sirve con
